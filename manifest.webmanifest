@@ -1,0 +1,16 @@
+{
+  "name": "Poker Texas Hold'em",
+  "short_name": "Poker",
+  "description": "Texas Hold'em No Limit en solo contre des bots ou entre amis, avec jetons fictifs.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#08130d",
+  "theme_color": "#08130d",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
