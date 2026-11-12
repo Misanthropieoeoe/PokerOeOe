@@ -60,7 +60,8 @@
   class PokerGame {
     /**
      * @param {Object} options
-     * @param {Array<{name:string,isHuman?:boolean,chips?:number}>} options.players
+     * @param {Array<{name:string,kind?:'local'|'remote'|'bot',isHuman?:boolean,chips?:number}>} options.players
+     *        kind : 'local' = humain sur cet appareil, 'remote' = humain connecté à distance, 'bot' = IA
      * @param {number} [options.startingChips=1000]
      * @param {number} [options.handsPerLevel=10] mains par niveau de blinds
      * @param {number} [options.firstDealer] index du premier donneur (aléatoire par défaut)
@@ -80,7 +81,9 @@
       this.players = players.map((p, i) => ({
         id: i,
         name: p.name,
-        isHuman: !!p.isHuman,
+        kind: p.kind || (p.isHuman ? 'local' : 'bot'),
+        isHuman: p.kind ? p.kind !== 'bot' : !!p.isHuman,
+        connected: true,
         chips: p.chips != null ? p.chips : startingChips,
         hand: [],
         bet: 0,            // mise sur le tour d'enchères en cours
@@ -166,10 +169,11 @@
       return this.pot + sum(this.players.map((p) => p.bet));
     }
 
+    /** Fin de partie : un seul joueur restant, ou plus aucun humain en jeu (inutile de regarder les bots finir). */
     isGameOver() {
       if (this.activePlayers.length <= 1) return true;
-      const human = this.humanPlayer;
-      return !!(human && human.eliminated);
+      const humans = this.players.filter((p) => p.isHuman);
+      return humans.length > 0 && humans.every((p) => p.eliminated);
     }
 
     /* ------------------------------------------------------------------ */
@@ -237,8 +241,6 @@
           this.players[idx].hand.push(this.deck.draw());
         }
       }
-      const human = this.humanPlayer;
-      if (human && !human.eliminated) this.log(`Vos cartes : ${cardsText(human.hand)}`, 'info');
 
       this.phase = PHASE.PREFLOP;
       this.toAct = this.nextIndex(this.bbIndex, (p) => this.needsToAct(p));
@@ -602,6 +604,56 @@
       const out = this.players.filter((p) => p.eliminated).sort((a, b) => a.place - b.place);
       return alive.map((p, i) => ({ player: p, place: p.place || i + 1 }))
         .concat(out.map((p) => ({ player: p, place: p.place })));
+    }
+
+    /**
+     * Vue de la table pour un joueur donné : objet JSON simple, sans aucune
+     * information secrète (les cartes des adversaires n'y figurent que lorsqu'elles
+     * sont retournées). C'est ce qui est affiché localement et envoyé sur le réseau.
+     * @param {number} viewerId siège du joueur qui regarde (-1 = spectateur)
+     */
+    buildView(viewerId) {
+      const results = this.results
+        ? { type: this.results.type, pots: this.results.pots, highlight: Array.from(this.results.highlight) }
+        : null;
+      return {
+        viewerId,
+        handNumber: this.handNumber,
+        phase: this.phase,
+        blinds: Object.assign({}, this.blinds),
+        dealerIndex: this.dealerIndex,
+        sbIndex: this.sbIndex,
+        bbIndex: this.bbIndex,
+        toAct: this.toAct,
+        potTotal: this.getPotTotal(),
+        pots: this.phase === PHASE.HAND_OVER ? [] : this.computePots(true).map((pot) => pot.amount),
+        community: this.community.slice(),
+        allInRunout: this.allInRunout,
+        results,
+        gameOver: this.isGameOver(),
+        players: this.players.map((p) => ({
+          id: p.id,
+          name: p.name,
+          kind: p.kind,
+          isHuman: p.isHuman,
+          connected: p.connected,
+          chips: p.chips,
+          bet: p.bet,
+          folded: p.folded,
+          allIn: p.allIn,
+          eliminated: p.eliminated,
+          eliminatedAt: p.eliminatedAt,
+          place: p.place,
+          lastAction: p.lastAction,
+          isWinner: p.isWinner,
+          wonAmount: p.wonAmount,
+          showCards: p.showCards,
+          cardCount: p.hand.length,
+          hand: p.id === viewerId || p.showCards ? p.hand.slice() : null,
+          bestHandName: p.showCards && p.bestHand ? p.bestHand.name : null,
+        })),
+        ranking: this.getRanking().map((r) => ({ id: r.player.id, place: r.place })),
+      };
     }
 
     /** Total des jetons en jeu (vérification de cohérence). */

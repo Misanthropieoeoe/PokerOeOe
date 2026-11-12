@@ -14,15 +14,21 @@
     <div class="home-card">
       <div class="home-suits" aria-hidden="true"><span>♠</span><span class="red">♥</span><span class="red">♦</span><span>♣</span></div>
       <h1 id="home-title">Texas Hold'em</h1>
-      <p class="home-subtitle">No Limit · en solo contre des bots</p>
+      <p class="home-subtitle">No Limit · contre des bots ou entre amis</p>
 
-      <form id="home-form" autocomplete="off">
+      <form id="home-form" autocomplete="off" novalidate>
+        <div class="segmented mode-tabs" role="radiogroup" aria-label="Mode de jeu">
+          <label><input type="radio" name="mode" value="solo" checked><span>Solo</span></label>
+          <label><input type="radio" name="mode" value="create"><span>Créer une table</span></label>
+          <label><input type="radio" name="mode" value="join"><span>Rejoindre</span></label>
+        </div>
+
         <label class="field">
           <span class="field-label">Votre pseudo</span>
           <input id="input-name" type="text" maxlength="14" value="Joueur" required>
         </label>
 
-        <fieldset class="field">
+        <fieldset class="field" data-modes="solo">
           <legend class="field-label">Nombre de bots</legend>
           <div class="segmented">
             <label><input type="radio" name="bots" value="3"><span>3</span></label>
@@ -31,8 +37,8 @@
           </div>
         </fieldset>
 
-        <fieldset class="field">
-          <legend class="field-label">Difficulté</legend>
+        <fieldset class="field" data-modes="solo create">
+          <legend class="field-label">Difficulté des bots</legend>
           <div class="segmented">
             <label><input type="radio" name="difficulty" value="facile"><span>Facile</span></label>
             <label><input type="radio" name="difficulty" value="moyen" checked><span>Moyen</span></label>
@@ -41,10 +47,60 @@
           <p class="field-hint" id="difficulty-hint"></p>
         </fieldset>
 
-        <button type="submit" class="btn btn-primary btn-large">Commencer la partie</button>
+        <label class="field" data-modes="join">
+          <span class="field-label">Code de la table</span>
+          <input id="input-code" type="text" maxlength="8" placeholder="Ex. K7PQ2" autocapitalize="characters" spellcheck="false">
+        </label>
+
+        <p class="field-hint" data-modes="create">Vous recevrez un code à partager. Vos amis rejoignent depuis leur téléphone ou leur ordinateur ; des bots complètent la table si besoin.</p>
+
+        <p class="form-error" id="home-error" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn-primary btn-large" id="btn-start">Commencer la partie</button>
       </form>
 
-      <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu.</p>
+      <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu. Le jeu en ligne nécessite une connexion Internet.</p>
+    </div>
+  </section>
+
+  <!-- ============ Salle d'attente (multijoueur) ============ -->
+  <section id="screen-lobby" class="screen" aria-labelledby="lobby-code">
+    <div class="home-card lobby-card">
+      <p class="eyebrow">Table en ligne · code</p>
+      <h1 class="lobby-code" id="lobby-code">-----</h1>
+      <p class="home-subtitle" id="lobby-subtitle"></p>
+
+      <div class="share-row" id="share-row">
+        <input id="share-link" type="text" readonly aria-label="Lien d'invitation">
+        <button type="button" class="btn btn-ghost btn-small" id="btn-copy">Copier le lien</button>
+      </div>
+
+      <h2 class="lobby-title">Joueurs <span id="lobby-count" class="pill">1 / 6</span></h2>
+      <ul class="lobby-players" id="lobby-players"></ul>
+
+      <div class="lobby-host" id="lobby-host">
+        <div class="lobby-option">
+          <span class="field-label">Bots pour compléter</span>
+          <div class="stepper">
+            <button type="button" class="btn btn-chip btn-step" id="bots-minus" aria-label="Un bot de moins">−</button>
+            <output id="lobby-bots">2</output>
+            <button type="button" class="btn btn-chip btn-step" id="bots-plus" aria-label="Un bot de plus">+</button>
+          </div>
+        </div>
+        <div class="lobby-option">
+          <span class="field-label">Difficulté</span>
+          <div class="segmented">
+            <label><input type="radio" name="lobby-difficulty" value="facile"><span>Facile</span></label>
+            <label><input type="radio" name="lobby-difficulty" value="moyen" checked><span>Moyen</span></label>
+            <label><input type="radio" name="lobby-difficulty" value="difficile"><span>Difficile</span></label>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-large" id="btn-launch">Lancer la partie</button>
+      </div>
+
+      <p class="lobby-wait" id="lobby-wait">En attente du lancement de la partie par l’hôte…</p>
+      <p class="form-error" id="lobby-error" role="alert" hidden></p>
+      <button type="button" class="btn btn-ghost" id="btn-lobby-leave">Quitter la table</button>
     </div>
   </section>
 
@@ -54,7 +110,7 @@
       <div class="topbar-info">
         <span id="info-hand" class="pill">Main n°1</span>
         <span id="info-blinds" class="pill">Blinds 10 / 20</span>
-        <span id="info-difficulty" class="pill pill-muted">Moyen</span>
+        <span id="info-table" class="pill pill-muted" hidden></span>
       </div>
       <div class="topbar-actions">
         <button id="btn-log" class="btn btn-ghost btn-small" type="button" aria-controls="log-panel">Historique</button>
@@ -125,6 +181,7 @@
       <h1 id="end-title">Partie terminée</h1>
       <p class="home-subtitle" id="end-subtitle"></p>
       <ol class="ranking" id="end-ranking"></ol>
+      <p class="lobby-wait" id="end-wait" hidden>L’hôte peut relancer une partie à la même table.</p>
       <div class="end-actions">
         <button type="button" class="btn btn-primary btn-large" id="btn-replay">Rejouer</button>
         <button type="button" class="btn btn-ghost" id="btn-settings">Changer les réglages</button>
@@ -136,6 +193,8 @@
   <script src="js/handEvaluator.js"></script>
   <script src="js/game.js"></script>
   <script src="js/bot.js"></script>
+  <script src="js/session.js"></script>
+  <script src="js/net.js"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>

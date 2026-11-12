@@ -443,7 +443,10 @@ h1 {
   font-weight: 800;
   background: linear-gradient(135deg, #3b6f8f, #1d3c52);
 }
-.seat.human .avatar { background: linear-gradient(135deg, #ffd66e, var(--gold-dark)); color: #2a1d00; }
+.avatar.me { background: linear-gradient(135deg, #ffd66e, var(--gold-dark)); color: #2a1d00; }
+.avatar.person { background: linear-gradient(135deg, #9a6ad8, #55308f); }
+.seat.offline .seat-box { opacity: 0.55; border-style: dashed; }
+.seat-action.offline { background: #5b2a2a; color: #ffd0cb; }
 .seat-text { min-width: 0; line-height: 1.2; }
 .seat-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seat-chips { font-size: 12px; color: var(--gold); font-weight: 600; white-space: nowrap; }
@@ -743,7 +746,8 @@ body.compact .human .seat-box { max-width: 130px; }
 @media (max-width: 600px) {
   .topbar { padding: 6px 8px; }
   .pill { font-size: 12px; padding: 3px 8px; }
-  #info-difficulty { display: none; }
+  #info-table { display: none; }
+  .topbar-actions { flex-wrap: nowrap; }
   .controls { padding: 6px 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); gap: 6px; }
   .controls-status { font-size: 13px; }
   .main-actions { gap: 6px; }
@@ -785,3 +789,94 @@ body.compact .human .seat-box { max-width: 130px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Accueil : modes de jeu ---------- */
+
+.mode-tabs span { font-size: 14px; padding: 10px 4px; }
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.18);
+  border: 1px solid rgba(231, 76, 60, 0.45);
+  color: #ffc9c2;
+  font-size: 14px;
+  line-height: 1.4;
+}
+#input-code { text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; filter: none; transform: none; }
+
+/* ---------- Salle d'attente ---------- */
+
+.lobby-card { display: grid; gap: 14px; }
+.lobby-card .home-subtitle { margin: 0; line-height: 1.45; }
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.lobby-code {
+  margin: 0;
+  font-size: 46px;
+  letter-spacing: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  padding-left: 10px; /* compense l'espacement après la dernière lettre */
+}
+.share-row { display: flex; gap: 8px; }
+.share-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.lobby-title {
+  margin: 4px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  text-align: left;
+}
+.lobby-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+.lobby-players li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.lobby-players li.bot { opacity: 0.75; }
+.lobby-players .avatar { width: 30px; height: 30px; font-size: 14px; }
+.lobby-players .avatar.host { background: linear-gradient(135deg, #ffd66e, var(--gold-dark)); color: #2a1d00; }
+.lobby-players .avatar.bot { background: rgba(255, 255, 255, 0.1); }
+.lobby-name { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+.lobby-host { display: grid; gap: 14px; text-align: left; }
+.lobby-option { display: grid; gap: 8px; }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper output { min-width: 24px; text-align: center; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lobby-wait { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+.log-list .log-private { color: var(--gold); font-style: italic; }
