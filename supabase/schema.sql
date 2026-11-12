@@ -45,14 +45,13 @@ create index if not exists games_user_idx on public.games (user_id);
 -- Personnalisation du profil : cadre de couleur et photo (chemin dans le stockage « avatars »)
 alter table public.profiles add column if not exists frame text not null default 'or';
 alter table public.profiles add column if not exists avatar_path text;
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'profiles_frame_check') then
-    alter table public.profiles add constraint profiles_frame_check
-      check (frame in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel'));
-  end if;
-end;
-$$;
+-- Cadres exclusifs attribués à un compte précis (voir grant_frame plus bas)
+alter table public.profiles add column if not exists exclusive_frames text[] not null default '{}';
+
+-- Cadres existants : 8 pour tout le monde + les cadres exclusifs
+alter table public.profiles drop constraint if exists profiles_frame_check;
+alter table public.profiles add constraint profiles_frame_check
+  check (frame in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel', 'couronne'));
 
 -- Titre affiché sous le pseudo (débloqué grâce aux statistiques)
 alter table public.profiles add column if not exists title text not null default 'debutant';
@@ -210,14 +209,71 @@ set search_path = public
 as $$
 declare
   uid    uuid := auth.uid();
+  me     public.profiles;
   result public.profiles;
 begin
   if uid is null then raise exception 'Vous devez être connecté.'; end if;
-  if p_frame is null or p_frame not in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel') then
+  select * into me from public.profiles where id = uid;
+  if not found then raise exception 'Profil introuvable.'; end if;
+  if p_frame is null or p_frame not in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel', 'couronne') then
     raise exception 'Cadre inconnu.';
+  end if;
+  if p_frame not in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel') then
+    -- Cadre exclusif : seulement s'il a été attribué à ce compte
+    if p_frame <> all (me.exclusive_frames) then
+      raise exception 'Ce cadre est réservé à un autre compte.';
+    end if;
   end if;
   update public.profiles set frame = p_frame where id = uid returning * into result;
   return result;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Administration (à lancer depuis le SQL Editor de Supabase ; interdit aux joueurs)
+--   Attribuer un cadre exclusif : select public.grant_frame('adresse@exemple.fr', 'couronne');
+--   Le retirer                  : select public.revoke_frame('adresse@exemple.fr', 'couronne');
+-- ---------------------------------------------------------------------------
+
+create or replace function public.grant_frame(p_email text, p_frame text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target uuid;
+  name   text;
+begin
+  if p_frame not in ('couronne') then raise exception 'Cadre exclusif inconnu : %', p_frame; end if;
+  select id into target from auth.users where lower(email) = lower(btrim(p_email));
+  if target is null then raise exception 'Aucun compte avec l''adresse %', p_email; end if;
+  update public.profiles
+     set exclusive_frames = array(select distinct unnest(exclusive_frames || array[p_frame])),
+         frame = p_frame   -- le cadre est porté tout de suite
+   where id = target
+  returning pseudo into name;
+  if name is null then raise exception 'Ce compte n''a pas encore de profil (il doit se connecter une fois au jeu).'; end if;
+  return format('Cadre « %s » attribué à %s', p_frame, name);
+end;
+$$;
+
+create or replace function public.revoke_frame(p_email text, p_frame text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target uuid;
+begin
+  select id into target from auth.users where lower(email) = lower(btrim(p_email));
+  if target is null then raise exception 'Aucun compte avec l''adresse %', p_email; end if;
+  update public.profiles
+     set exclusive_frames = array_remove(exclusive_frames, p_frame),
+         frame = case when frame = p_frame then 'or' else frame end
+   where id = target;
+  return format('Cadre « %s » retiré', p_frame);
 end;
 $$;
 
@@ -438,6 +494,8 @@ revoke all on function public.set_pseudo(text) from public;
 revoke all on function public.set_frame(text) from public;
 revoke all on function public.set_avatar(text) from public;
 revoke all on function public.set_title(text) from public;
+revoke all on function public.grant_frame(text, text) from public, anon, authenticated;
+revoke all on function public.revoke_frame(text, text) from public, anon, authenticated;
 revoke all on function public.start_game(integer) from public;
 revoke all on function public.finish_game(bigint, bigint, integer, integer, bigint) from public;
 revoke all on function public.refill_chips() from public;

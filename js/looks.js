@@ -22,6 +22,9 @@
     { id: 'amethyste', name: 'Améthyste' },
     { id: 'neon', name: 'Néon' },
     { id: 'arcenciel', name: 'Arc-en-ciel' },
+    // Cadres exclusifs : visibles seulement pour les comptes à qui ils ont été attribués
+    // (supabase/schema.sql : select public.grant_frame('adresse@exemple.fr', 'couronne');)
+    { id: 'couronne', name: 'Couronne', exclusive: true },
   ];
   const FRAME_IDS = new Set(FRAMES.map((f) => f.id));
 

@@ -425,12 +425,16 @@
       el.profileAvatar.innerHTML = Looks.avatarHtml({ name: p.pseudo, look, variant: 'me', className: 'profile-avatar' });
       el.btnAvatarRemove.hidden = !p.avatar_path;
       // Aperçu de chaque cadre avec sa propre photo (ou son initiale)
-      el.frameGrid.innerHTML = Looks.FRAMES.map((frame) => {
-        const checked = (p.frame || 'or') === frame.id ? ' checked' : '';
-        return `<label class="frame-option"><input type="radio" name="frame" value="${frame.id}"${checked}>` +
-          Looks.avatarHtml({ name: p.pseudo, look: { avatar: look.avatar, frame: frame.id }, variant: 'me' }) +
-          `<span>${frame.name}</span></label>`;
-      }).join('');
+      const owned = new Set(p.exclusive_frames || []);
+      el.frameGrid.innerHTML = Looks.FRAMES
+        .filter((frame) => !frame.exclusive || owned.has(frame.id)) // exclusifs : seulement s'ils ont été attribués
+        .map((frame) => {
+          const checked = (p.frame || 'or') === frame.id ? ' checked' : '';
+          return `<label class="frame-option${frame.exclusive ? ' exclusive' : ''}">` +
+            `<input type="radio" name="frame" value="${frame.id}"${checked}>` +
+            Looks.avatarHtml({ name: p.pseudo, look: { avatar: look.avatar, frame: frame.id }, variant: 'me' }) +
+            `<span>${frame.name}</span>${frame.exclusive ? '<span class="exclusive-tag">Exclusif</span>' : ''}</label>`;
+        }).join('');
       el.profileTitle.textContent = p.pseudo;
       el.profilePlayerTitle.textContent = Looks.titleName(p.title) || '';
       // Titres : débloqués (choisissables) ou verrouillés (avec la progression)

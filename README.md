@@ -39,6 +39,14 @@ Les comptes utilisent [Supabase](https://supabase.com) (gratuit). Mise en place 
 3. Renseigner l'URL du projet et la clé **publique** (`sb_publishable_…` ou « anon ») dans `js/config.js`.
    Ne jamais y mettre la clé secrète (`sb_secret_…` / « service_role »).
 
+Cadres exclusifs : certains cadres (comme « Couronne ») ne sont proposés qu'aux comptes à qui on les attribue,
+depuis le SQL Editor de Supabase :
+
+```sql
+select public.grant_frame('adresse@exemple.fr', 'couronne');   -- attribuer (et porter tout de suite)
+select public.revoke_frame('adresse@exemple.fr', 'couronne');  -- retirer
+```
+
 Sécurité : les joueurs ne peuvent que **lire** leur propre profil ; jetons et statistiques ne changent que via
 les fonctions de `supabase/schema.sql`, qui vérifient les montants. Comme la partie se joue dans le navigateur,
 un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les jetons restent fictifs.
