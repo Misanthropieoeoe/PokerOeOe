@@ -980,3 +980,4 @@ input[readonly] { opacity: 0.75; cursor: default; }
   font-weight: 700;
   color: var(--gold);
 }
+.account-bar .account-error { color: #ffc9c2; flex: 1 1 100%; text-align: center; }

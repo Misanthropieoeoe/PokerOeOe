@@ -88,6 +88,7 @@
         const act = button.dataset.act;
         if (act === 'profile') this.openProfile();
         else if (act === 'signout') this.signOutFromBar(button);
+        else if (act === 'retry') this.retryFromBar(button);
         else this.openAuth(act);
       });
 
@@ -207,7 +208,14 @@
           '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
       } else if (Account.user) {
-        bar.innerHTML = '<span class="account-status">Chargement de votre profil…</span>';
+        // Connecté mais profil pas (encore) chargé : on affiche l'erreur éventuelle et une porte de sortie.
+        const message = Account.profileError
+          ? `<span class="account-status account-error">Impossible de charger votre profil : ${escapeHtml(Account.profileError)}</span>`
+          : '<span class="account-status">Chargement de votre profil…</span>';
+        bar.innerHTML = message +
+          '<span class="account-buttons">' +
+          (Account.profileError ? '<button type="button" class="btn btn-ghost btn-small" data-act="retry">Réessayer</button>' : '') +
+          '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
       } else {
         bar.innerHTML =
           '<span class="account-status">Vous jouez en <strong>invité</strong> : rien n’est enregistré.</span>' +
@@ -215,6 +223,12 @@
           '<button type="button" class="btn btn-ghost btn-small" data-act="login">Se connecter</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signup">Créer un compte</button></span>';
       }
+    }
+
+    async retryFromBar(button) {
+      button.disabled = true;
+      button.textContent = 'Chargement…';
+      await Account.retryProfile();
     }
 
     /** Déconnexion depuis la barre de l'accueil. */

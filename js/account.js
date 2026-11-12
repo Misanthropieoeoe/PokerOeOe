@@ -19,6 +19,9 @@
 
   /** Messages d'erreur Supabase (en anglais) → français. */
   const ERROR_TRANSLATIONS = [
+    [/could not find the function|function .* does not exist|schema cache/i, 'La base de données n’est pas à jour : exécutez à nouveau supabase/schema.sql dans Supabase.'],
+    [/relation .* does not exist|could not find the table/i, 'La base de données n’est pas installée : exécutez supabase/schema.sql dans Supabase.'],
+    [/permission denied/i, 'Accès refusé à la base de données : exécutez à nouveau supabase/schema.sql dans Supabase.'],
     [/invalid login credentials/i, 'E-mail ou mot de passe incorrect.'],
     [/email not confirmed/i, 'Confirmez d’abord votre adresse e-mail grâce au lien reçu par mail.'],
     [/already registered|already been registered|user already exists/i, 'Un compte existe déjà avec cette adresse e-mail.'],
@@ -66,6 +69,7 @@
       this.user = null;          // utilisateur Supabase connecté
       this.profile = null;       // ligne de la table profiles
       this.recovery = false;     // vrai après un clic sur le lien « mot de passe oublié »
+      this.profileError = '';    // échec du chargement du profil (affiché avec « Réessayer »)
       this.unavailable = '';     // raison si le service ne répond pas
       this.listeners = [];
       this.ready = this.configured ? this.init(config) : Promise.resolve();
@@ -104,17 +108,47 @@
     async setUser(user, event) {
       const changed = (user && user.id) !== (this.user && this.user.id);
       this.user = user || null;
-      if (!this.user) this.profile = null;
-      else if (changed || !this.profile) await this.refreshProfile();
+      if (!this.user) {
+        this.profile = null;
+        this.profileError = '';
+      } else if (changed || !this.profile) {
+        await this.loadProfile();
+      }
       this.emit(event);
+    }
+
+    /** Charge le profil sans jamais lever d'erreur : en cas d'échec, profileError est renseigné. */
+    async loadProfile() {
+      this.profileError = '';
+      try {
+        await this.refreshProfile();
+      } catch (error) {
+        this.profile = null;
+        this.profileError = error.message || String(error);
+      }
+    }
+
+    /** Nouvel essai après un échec (bouton « Réessayer »). */
+    async retryProfile() {
+      await this.loadProfile();
+      this.emit('PROFILE');
     }
 
     async refreshProfile() {
       if (!this.user) return null;
-      const { data, error } = await this.client.from('profiles').select('*').eq('id', this.user.id).maybeSingle();
-      if (error) throw new Error(translateError(error));
-      this.profile = data;
-      return data;
+      const timeout = new Promise((resolve, reject) => {
+        setTimeout(() => reject(new Error('Le serveur des comptes ne répond pas. Réessayez.')), 15000);
+      });
+      const load = async () => {
+        const { data, error } = await this.client.from('profiles').select('*').eq('id', this.user.id).maybeSingle();
+        if (error) throw new Error(translateError(error));
+        // Compte créé avant l'installation de la base : le profil est créé maintenant.
+        return data || this.rpc('ensure_profile');
+      };
+      const profile = await Promise.race([load(), timeout]);
+      if (!profile) throw new Error('Profil introuvable : exécutez à nouveau supabase/schema.sql dans Supabase.');
+      this.profile = profile;
+      return profile;
     }
 
     onChange(listener) {

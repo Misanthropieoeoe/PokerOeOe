@@ -59,20 +59,29 @@ create policy "Lecture de ses parties" on public.games
 
 -- Aucune politique d'écriture : seules les fonctions ci-dessous modifient les données.
 
+-- Droits explicites (certains projets Supabase n'exposent pas automatiquement les nouvelles tables)
+grant usage on schema public to anon, authenticated;
+grant select on public.profiles to authenticated;
+grant select on public.games to authenticated;
+revoke insert, update, delete on public.profiles from anon, authenticated;
+revoke insert, update, delete on public.games from anon, authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Création automatique du profil à l'inscription
 -- (pseudo transmis par l'application dans les métadonnées ; si déjà pris
 --  entre-temps, un numéro est ajouté)
 -- ---------------------------------------------------------------------------
 
-create or replace function public.handle_new_user()
-returns trigger
+-- Pseudo libre à partir du pseudo souhaité (ajoute un numéro si besoin)
+create or replace function public.free_pseudo(p_wanted text)
+returns text
 language plpgsql
+stable
 security definer
 set search_path = public
 as $$
 declare
-  wanted    text := left(coalesce(nullif(btrim(new.raw_user_meta_data ->> 'pseudo'), ''), 'Joueur'), 14);
+  wanted    text := left(coalesce(nullif(btrim(p_wanted), ''), 'Joueur'), 14);
   candidate text;
   n         integer := 1;
 begin
@@ -84,7 +93,20 @@ begin
     n := n + 1;
     candidate := left(wanted, 14 - char_length(n::text)) || n::text;
   end loop;
-  insert into public.profiles (id, pseudo) values (new.id, candidate);
+  return candidate;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, pseudo)
+  values (new.id, public.free_pseudo(new.raw_user_meta_data ->> 'pseudo'))
+  on conflict (id) do nothing;
   return new;
 end;
 $$;
@@ -97,6 +119,28 @@ create trigger on_auth_user_created
 -- ---------------------------------------------------------------------------
 -- Fonctions appelées par le jeu
 -- ---------------------------------------------------------------------------
+
+-- Profil du joueur connecté, créé s'il manque (compte créé avant l'installation de ce script)
+create or replace function public.ensure_profile()
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid    uuid := auth.uid();
+  result public.profiles;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  select * into result from public.profiles where id = uid;
+  if found then return result; end if;
+  insert into public.profiles (id, pseudo)
+  select uid, public.free_pseudo(u.raw_user_meta_data ->> 'pseudo') from auth.users u where u.id = uid
+  on conflict (id) do nothing;
+  select * into result from public.profiles where id = uid;
+  return result;
+end;
+$$;
 
 -- Le pseudo est-il libre ? (utilisable sans compte : sert aussi aux invités)
 create or replace function public.pseudo_available(p_pseudo text)
@@ -244,6 +288,8 @@ $$;
 -- ---------------------------------------------------------------------------
 
 revoke all on function public.handle_new_user() from public;
+revoke all on function public.free_pseudo(text) from public;
+revoke all on function public.ensure_profile() from public;
 revoke all on function public.pseudo_available(text) from public;
 revoke all on function public.set_pseudo(text) from public;
 revoke all on function public.start_game(integer) from public;
@@ -251,6 +297,7 @@ revoke all on function public.finish_game(bigint, bigint, integer, integer, bigi
 revoke all on function public.refill_chips() from public;
 
 grant execute on function public.pseudo_available(text) to anon, authenticated;
+grant execute on function public.ensure_profile() to authenticated;
 grant execute on function public.set_pseudo(text) to authenticated;
 grant execute on function public.start_game(integer) to authenticated;
 grant execute on function public.finish_game(bigint, bigint, integer, integer, bigint) to authenticated;
