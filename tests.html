@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tests — évaluation des mains</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; background: #0d1a12; color: #e8efe9; margin: 0; padding: 24px 16px; }
+    main { max-width: 980px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 26px; }
+    h2 { margin: 28px 0 8px; font-size: 18px; color: #f5c451; }
+    .summary { padding: 12px 16px; border-radius: 10px; font-weight: 700; font-size: 18px; margin: 16px 0; }
+    .summary.ok { background: #1d5a34; }
+    .summary.ko { background: #7a1f1f; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); vertical-align: top; }
+    td.status { width: 28px; font-size: 16px; }
+    tr.pass td.status { color: #4cd17f; }
+    tr.fail { background: rgba(200, 40, 40, 0.18); }
+    tr.fail td.status { color: #ff6b6b; }
+    .detail { color: #9fb3a6; font-size: 12px; }
+    code { color: #cfe8d6; }
+    a { color: #f5c451; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Tests de handEvaluator.js</h1>
+  <p>Toutes les combinaisons, de la carte haute à la quinte flush royale, les kickers et les égalités.
+     Notation des cartes : <code>As</code> = As de pique, <code>Td</code> = Dix de carreau, <code>9c</code> = Neuf de trèfle, <code>Kh</code> = Roi de cœur.
+     <a href="index.html">← Retour au jeu</a></p>
+  <div id="summary" class="summary">Exécution…</div>
+  <div id="results"></div>
+</main>
+
+<script src="js/deck.js"></script>
+<script src="js/handEvaluator.js"></script>
+<script src="js/game.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const { parseCards, fullDeck, shuffle, Deck } = Poker.Cards;
+  const { evaluateHand, compareHands, findWinners, fastScore, packScore, CATEGORY } = Poker.HandEvaluator;
+
+  const groups = [];
+  let current = null;
+
+  function group(title) {
+    current = { title, tests: [] };
+    groups.push(current);
+  }
+
+  function test(name, fn) {
+    try {
+      const detail = fn();
+      current.tests.push({ name, ok: true, detail: detail || '' });
+    } catch (error) {
+      current.tests.push({ name, ok: false, detail: error.message });
+    }
+  }
+
+  function assert(condition, message) {
+    if (!condition) throw new Error(message || 'Assertion fausse');
+  }
+
+  function assertEqual(actual, expected, message) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) throw new Error(`${message ? message + ' — ' : ''}obtenu ${a}, attendu ${e}`);
+  }
+
+  const hand = (text) => evaluateHand(parseCards(text));
+  /** Compare deux mains : 1 si a gagne, -1 si b gagne, 0 si égalité. */
+  const versus = (a, b) => Math.sign(compareHands(hand(a), hand(b)));
+
+  /** Vérifie la catégorie et le nom d'une main. */
+  function expectHand(cards, category, name) {
+    const h = hand(cards);
+    assertEqual(h.category, category, 'catégorie');
+    if (name) assertEqual(h.name, name, 'nom');
+    return `${h.name} — meilleures cartes : ${h.cards.map(Poker.Cards.cardLabel).join(' ')}`;
+  }
+
+  /* ================================================================= */
+  group('Reconnaissance des combinaisons (7 cartes)');
+
+  test('Carte haute', () => expectHand('Ah Jd 9c 7s 4h 3d 2c', CATEGORY.HIGH_CARD, 'Carte haute As'));
+  test('Paire', () => expectHand('Kh Kd 9c 7s 4h 3d 2c', CATEGORY.PAIR, 'Paire de Rois'));
+  test("Paire d'As (élision)", () => expectHand('Ah Ad 9c 7s 4h 3d 2c', CATEGORY.PAIR, "Paire d'As"));
+  test('Double paire', () => expectHand('Kh Kd 7c 7s 4h 3d 2c', CATEGORY.TWO_PAIR, 'Double paire Rois et Sept'));
+  test('Brelan', () => expectHand('Qh Qd Qc 7s 4h 3d 2c', CATEGORY.THREE_OF_A_KIND, 'Brelan de Dames'));
+  test('Quinte', () => expectHand('9h 8d 7c 6s 5h Kd 2c', CATEGORY.STRAIGHT, 'Quinte hauteur Neuf'));
+  test('Quinte « roue » A-2-3-4-5', () => expectHand('Ah 2d 3c 4s 5h Kd 9c', CATEGORY.STRAIGHT, 'Quinte hauteur Cinq'));
+  test('Quinte à l’As (10-V-D-R-A)', () => expectHand('Ah Kd Qc Js Th 2d 3c', CATEGORY.STRAIGHT, 'Quinte hauteur As'));
+  test('Couleur', () => expectHand('Ah Jh 9h 6h 3h Kd 2c', CATEGORY.FLUSH, 'Couleur hauteur As'));
+  test('Full', () => expectHand('Kh Kd Kc 7s 7h 3d 2c', CATEGORY.FULL_HOUSE, 'Full aux Rois par les Sept'));
+  test('Carré', () => expectHand('9h 9d 9c 9s Ah 3d 2c', CATEGORY.FOUR_OF_A_KIND, 'Carré de Neuf'));
+  test('Quinte flush', () => expectHand('9s 8s 7s 6s 5s Ah Ad', CATEGORY.STRAIGHT_FLUSH, 'Quinte flush hauteur Neuf'));
+  test('Quinte flush « roue » (A-2-3-4-5 assortis)', () => expectHand('As 2s 3s 4s 5s Kd Kh', CATEGORY.STRAIGHT_FLUSH, 'Quinte flush hauteur Cinq'));
+  test('Quinte flush royale', () => expectHand('As Ks Qs Js Ts 2d 3c', CATEGORY.ROYAL_FLUSH, 'Quinte flush royale'));
+  test('Fonctionne avec 5 et 6 cartes', () => {
+    expectHand('Ah Ad Ac Kd Ks', CATEGORY.FULL_HOUSE, 'Full aux As par les Rois');
+    return expectHand('2h 3h 4h 5h 6h 9c', CATEGORY.STRAIGHT_FLUSH, 'Quinte flush hauteur Six');
+  });
+  test('Refuse moins de 5 cartes', () => {
+    let threw = false;
+    try { hand('Ah Kd 3c 2s'); } catch (e) { threw = true; }
+    assert(threw, 'une erreur était attendue');
+  });
+
+  /* ================================================================= */
+  group('Cas pièges');
+
+  test('Pas de quinte « circulaire » (R-A-2-3-4)', () => expectHand('Kh Ad 2c 3s 4h 9d 8c', CATEGORY.HIGH_CARD));
+  test('6 cartes consécutives : la quinte la plus haute', () => expectHand('4h 5d 6c 7s 8h 9d Kc', CATEGORY.STRAIGHT, 'Quinte hauteur Neuf'));
+  test('Roue + 6 : quinte hauteur 6 (pas 5)', () => expectHand('Ah 2d 3c 4s 5h 6d Kc', CATEGORY.STRAIGHT, 'Quinte hauteur Six'));
+  test('6 cartes de la même couleur : les 5 plus hautes', () => {
+    const h = hand('Ah Qh 9h 7h 4h 2h Kd');
+    assertEqual(h.score, [CATEGORY.FLUSH, 14, 12, 9, 7, 4]);
+  });
+  test('Couleur + quinte non assortie → couleur', () => expectHand('9h 8h 7c 6h 5d 2h Kh', CATEGORY.FLUSH));
+  test('Quinte flush préférée à une couleur plus haute', () => expectHand('9s 8s 7s 6s 5s As Ks', CATEGORY.STRAIGHT_FLUSH, 'Quinte flush hauteur Neuf'));
+  test('Deux brelans → full (brelan le plus haut + paire)', () => expectHand('Kh Kd Kc 7s 7h 7d 2c', CATEGORY.FULL_HOUSE, 'Full aux Rois par les Sept'));
+  test('Brelan + deux paires → full avec la meilleure paire', () => expectHand('5h 5d 5c Js Jh 9d 9c', CATEGORY.FULL_HOUSE, 'Full aux Cinq par les Valets'));
+  test('Trois paires → les deux meilleures + meilleur kicker', () => {
+    const h = hand('Kh Kd 7c 7s 4h 4d Qc');
+    assertEqual(h.score, [CATEGORY.TWO_PAIR, 13, 7, 12]);
+  });
+  test('Trois paires : la 3e paire peut servir de kicker', () => {
+    const h = hand('Kh Kd 7c 7s 5h 5d 2c');
+    assertEqual(h.score, [CATEGORY.TWO_PAIR, 13, 7, 5]);
+  });
+  test('Carré + brelan : kicker = rang du brelan', () => {
+    const h = hand('9h 9d 9c 9s Kh Kd Kc');
+    assertEqual(h.score, [CATEGORY.FOUR_OF_A_KIND, 9, 13]);
+  });
+  test('Meilleures cartes de la quinte flush royale', () => {
+    const ids = hand('2d As Ks 3c Qs Js Ts').cards.map((c) => c.id).sort();
+    assertEqual(ids, ['10s', '11s', '12s', '13s', '14s'].sort());
+  });
+
+  /* ================================================================= */
+  group('Hiérarchie des combinaisons');
+
+  const ladder = [
+    ['Carte haute', 'Ah Jd 9c 7s 4h 3d 2c'],
+    ['Paire', '2h 2d 9c 7s 4h 3d Kc'],
+    ['Double paire', '3h 3d 2c 2s 4h 7d 9c'],
+    ['Brelan', '2h 2d 2c 7s 4h 9d Kc'],
+    ['Quinte (roue)', 'Ah 2d 3c 4s 5h 9d Kc'],
+    ['Couleur', '2h 4h 6h 8h 9h Kd Kc'],
+    ['Full', '2h 2d 2c 3s 3h 9d Kc'],
+    ['Carré', '2h 2d 2c 2s 4h 9d Kc'],
+    ['Quinte flush', '2s 3s 4s 5s 6s 9d Kc'],
+    ['Quinte flush royale', 'As Ks Qs Js Ts 9d 8c'],
+  ];
+  for (let i = 1; i < ladder.length; i++) {
+    test(`${ladder[i][0]} bat ${ladder[i - 1][0]}`, () => {
+      assertEqual(versus(ladder[i][1], ladder[i - 1][1]), 1);
+    });
+  }
+
+  /* ================================================================= */
+  group('Départage par les kickers');
+
+  test("Paire d'As : kicker Roi bat kicker Dame", () => assertEqual(versus('Ah Ad Kc 7s 4h 3d 2c', 'Ah Ad Qc 7s 4h 3d 2c'), 1));
+  test('Paire : 3e kicker décisif', () => assertEqual(versus('8h 8d Ac Ks 9h 3d 2c', '8h 8d Ac Ks 7h 3d 2c'), 1));
+  test('Paire plus haute bat paire plus basse', () => assertEqual(versus('9h 9d 2c 3s 4h 6d 7c', '8h 8d Ac Ks Qh 3d 2c'), 1));
+  test('Double paire : paire haute décisive', () => assertEqual(versus('Ah Ad 2c 2s 4h 6d 7c', 'Kh Kd Qc Qs 4h 6d 7c'), 1));
+  test('Double paire : paire basse décisive', () => assertEqual(versus('Kh Kd 9c 9s 4h 3d 2c', 'Kh Kd 8c 8s 4h 3d 2c'), 1));
+  test('Double paire : kicker décisif', () => assertEqual(versus('Kh Kd 9c 9s Ah 3d 2c', 'Kh Kd 9c 9s Qh 3d 2c'), 1));
+  test('Brelan : kickers décisifs', () => assertEqual(versus('7h 7d 7c As Jh 3d 2c', '7h 7d 7c As Th 3d 2c'), 1));
+  test('Quinte : la plus haute gagne', () => assertEqual(versus('6h 5d 4c 3s 2h Kd Kc', 'Ah 2d 3c 4s 5h Kd Qc'), 1));
+  test('Couleur : 5e carte décisive', () => assertEqual(versus('Ah Jh 9h 6h 4h', 'Ah Jh 9h 6h 3h'), 1));
+  test('Full : le brelan prime sur la paire', () => assertEqual(versus('Qh Qd Qc 2s 2h', 'Jh Jd Jc As Ah'), 1));
+  test('Full : à brelan égal, la paire décide', () => assertEqual(versus('Qh Qd Qc 9s 9h', 'Qh Qd Qc 8s 8h'), 1));
+  test('Carré : kicker décisif', () => assertEqual(versus('9h 9d 9c 9s Ah', '9h 9d 9c 9s Kh'), 1));
+  test('Quinte flush : la plus haute gagne', () => assertEqual(versus('Ts 9s 8s 7s 6s', '9h 8h 7h 6h 5h'), 1));
+  test('Carte haute : 5e carte décisive', () => assertEqual(versus('Ah Qd 9c 7s 5h', 'Ah Qd 9c 7s 4h'), 1));
+  test('Les 6e et 7e cartes ne comptent pas', () => assertEqual(versus('Ah Kd Qc Js 9h 3d 2c', 'Ah Kd Qc Js 9h 4d 3c'), 0));
+
+  /* ================================================================= */
+  group('Égalités et partage du pot');
+
+  test('Le tableau joue (quinte sur le tableau) → égalité', () => {
+    const board = 'Ts 9d 8c 7h 6s';
+    assertEqual(versus(`2c 3d ${board}`, `2h 4d ${board}`), 0);
+  });
+  test('Quinte flush royale sur le tableau → tout le monde partage', () => {
+    const board = 'As Ks Qs Js Ts';
+    const hands = [`2c 3d ${board}`, `Ah Ad ${board}`, `9s 8s ${board}`].map(hand);
+    assertEqual(findWinners(hands), [0, 1, 2]);
+  });
+  test('Même quinte, couleurs différentes → égalité', () => assertEqual(versus('Ah Kd Qc Js Th', 'As Kc Qd Jh Ts'), 0));
+  test('Même couleur exacte de valeurs → égalité', () => assertEqual(versus('Ah Jh 9h 6h 3h', 'As Js 9s 6s 3s'), 0));
+  test('Double paire : 3e paire du tableau, kicker partagé → égalité', () => {
+    // Tableau K K 7 7 A : les deux joueurs jouent K K 7 7 A
+    const board = 'Kh Kd 7c 7s Ah';
+    assertEqual(versus(`Qc 2d ${board}`, `Jc 3d ${board}`), 0);
+  });
+  test('Double paire « contrefaite » : le kicker personnel départage', () => {
+    // Tableau K K 7 7 2 : la Dame bat le Valet en kicker
+    const board = 'Kh Kd 7c 7s 2h';
+    assertEqual(versus(`Qc 3d ${board}`, `Jc 4d ${board}`), 1);
+  });
+  test('Paire partagée avec le même kicker → égalité', () => assertEqual(versus('Ah 9d Ac 7s 4h 3d 2c', 'Ah 9c Ad 7h 4s 3c 2d'), 0));
+  test('findWinners : un seul gagnant', () => {
+    const board = '2c 7d 9c Jd 3s';
+    const hands = [`As Ah ${board}`, `Ks Kh ${board}`, `Qs Qh ${board}`].map(hand);
+    assertEqual(findWinners(hands), [0]);
+  });
+  test('findWinners : deux gagnants sur trois', () => {
+    const board = 'As Ks Qd 7h 2c';
+    const hands = [`Jc Tc ${board}`, `3d 4d ${board}`, `Jh Td ${board}`].map(hand);
+    assertEqual(findWinners(hands), [0, 2]);
+  });
+
+  /* ================================================================= */
+  group('Cohérence des deux évaluateurs (fastScore utilisé par les bots)');
+
+  test('3 000 mains aléatoires de 5 à 7 cartes : scores identiques', () => {
+    for (let i = 0; i < 3000; i++) {
+      const cards = shuffle(fullDeck()).slice(0, 5 + (i % 3));
+      const slow = packScore(evaluateHand(cards).score);
+      const fast = fastScore(cards);
+      if (slow !== fast) throw new Error(`Différence sur ${cards.map(Poker.Cards.cardLabel).join(' ')}`);
+    }
+    return '3 000 mains vérifiées';
+  });
+
+  /* ================================================================= */
+  group('Moteur de jeu : side pots et partage');
+
+  /** Paquet ordonné : les cartes indiquées sortent en premier, puis le reste. */
+  function stackedDeck(text) {
+    const first = parseCards(text);
+    const ids = new Set(first.map((c) => c.id));
+    return () => new Deck(first.concat(fullDeck().filter((c) => !ids.has(c.id))));
+  }
+
+  function playToEnd(game, script) {
+    let guard = 0;
+    while (game.phase !== Poker.PHASE.HAND_OVER) {
+      if (++guard > 50) throw new Error('boucle infinie');
+      if (game.roundComplete) { game.advance(); continue; }
+      const p = game.currentPlayer();
+      game.act(p.id, script[p.name].shift() || { type: 'check' });
+    }
+  }
+
+  test('Trois tapis de tailles différentes → pot principal + side pot', () => {
+    // A (100) a les As, B (300) les Rois, C (500) les Dames. Bouton : A → SB = B, BB = C.
+    // Distribution : B, C, A, B, C, A ; puis brûlage, flop, brûlage, turn, brûlage, river.
+    const game = new Poker.PokerGame({
+      players: [{ name: 'A', chips: 100 }, { name: 'B', chips: 300 }, { name: 'C', chips: 500 }],
+      firstDealer: 0,
+      deckFactory: stackedDeck('Ks Qs As Kh Qh Ah 4h 2c 7d 9c 5h Jd 6h 3s'),
+    });
+    game.startHand();
+    playToEnd(game, { A: [{ type: 'allin' }], B: [{ type: 'allin' }], C: [{ type: 'call' }] });
+    assertEqual(game.results.pots.map((p) => p.amount), [300, 400], 'montants des pots');
+    assertEqual(game.players.map((p) => p.chips), [300, 400, 200], 'jetons finaux');
+    return 'A gagne 300 (pot principal), B gagne 400 (side pot), C récupère 200';
+  });
+
+  test('Mise non suivie rendue au joueur', () => {
+    const game = new Poker.PokerGame({
+      players: [{ name: 'A', chips: 1000 }, { name: 'B', chips: 200 }],
+      firstDealer: 0,
+    });
+    game.startHand(); // tête-à-tête : A (bouton) = SB 10, B = BB 20
+    game.act(0, { type: 'raise', amount: 800 });
+    game.act(1, { type: 'allin' }); // B suit pour 200 au total
+    while (game.phase !== Poker.PHASE.HAND_OVER) game.advance();
+    const total = game.players[0].chips + game.players[1].chips;
+    assertEqual(total, 1200, 'jetons conservés');
+    assert(game.players[0].chips >= 800, 'A doit récupérer au moins les 600 non suivis');
+    assertEqual(game.results.pots.reduce((s, p) => s + p.amount, 0), 400, 'pot disputé');
+  });
+
+  test('Égalité avec jeton indivisible : il va au 1er joueur après le bouton', () => {
+    const game = new Poker.PokerGame({
+      players: [{ name: 'A', chips: 1000 }, { name: 'B', chips: 0 }, { name: 'C', chips: 0 }],
+      firstDealer: 0,
+    });
+    // État construit à la main : A s'est couché après avoir mis 25, B et C ont mis 100 chacun.
+    game.handNumber = 1;
+    game.dealerIndex = 0;
+    game.community = parseCards('As Ks Qs Js Ts');
+    game.players[0].hand = parseCards('2c 3d'); game.players[0].folded = true; game.players[0].totalBet = 25;
+    game.players[1].hand = parseCards('4c 5d'); game.players[1].totalBet = 100;
+    game.players[2].hand = parseCards('6c 7d'); game.players[2].totalBet = 100;
+    game.pot = 225;
+    game._showdown();
+    assertEqual([game.players[1].chips, game.players[2].chips], [113, 112]);
+    return '225 partagés : 113 pour B (à gauche du bouton), 112 pour C';
+  });
+
+  test('Relance incomplète à tapis : ne rouvre pas les relances', () => {
+    const game = new Poker.PokerGame({
+      players: [{ name: 'A', chips: 1000 }, { name: 'B', chips: 1000 }, { name: 'C', chips: 130 }],
+      firstDealer: 0,
+    });
+    game.startHand(); // bouton A, SB B (10), BB C (20) ; A parle en premier
+    game.act(0, { type: 'raise', amount: 100 });  // A relance à 100
+    game.act(1, { type: 'call' });                 // B suit 100
+    game.act(2, { type: 'allin' });                // C tapis à 130 (+30 < relance min de 80)
+    const legalA = game.getLegalActions(0);
+    assertEqual(legalA.canRaise, false, 'A ne peut que suivre ou se coucher');
+    assertEqual(legalA.toCall, 30);
+  });
+
+  /* ================================================================= */
+  // Affichage
+  let total = 0;
+  let passed = 0;
+  const container = document.getElementById('results');
+  for (const g of groups) {
+    const h2 = document.createElement('h2');
+    h2.textContent = g.title;
+    container.appendChild(h2);
+    const table = document.createElement('table');
+    for (const t of g.tests) {
+      total++;
+      if (t.ok) passed++;
+      const tr = document.createElement('tr');
+      tr.className = t.ok ? 'pass' : 'fail';
+      tr.innerHTML = `<td class="status">${t.ok ? '✔' : '✘'}</td><td>${t.name}${t.detail ? `<div class="detail"></div>` : ''}</td>`;
+      if (t.detail) tr.querySelector('.detail').textContent = t.detail;
+      table.appendChild(tr);
+    }
+    container.appendChild(table);
+  }
+  const summary = document.getElementById('summary');
+  const ok = passed === total;
+  summary.className = 'summary ' + (ok ? 'ok' : 'ko');
+  summary.textContent = ok ? `✔ ${passed} / ${total} tests réussis` : `✘ ${total - passed} test(s) en échec — ${passed} / ${total} réussis`;
+  document.title = `${ok ? 'OK' : 'ÉCHEC'} ${passed}/${total} — Tests poker`;
+})();
+</script>
+</body>
+</html>

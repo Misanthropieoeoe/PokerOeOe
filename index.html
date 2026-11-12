@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08130d">
+  <title>Poker Hold'em</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============ Écran d'accueil ============ -->
+  <section id="screen-home" class="screen active" aria-labelledby="home-title">
+    <div class="home-card">
+      <div class="home-suits" aria-hidden="true"><span>♠</span><span class="red">♥</span><span class="red">♦</span><span>♣</span></div>
+      <h1 id="home-title">Texas Hold'em</h1>
+      <p class="home-subtitle">No Limit · en solo contre des bots</p>
+
+      <form id="home-form" autocomplete="off">
+        <label class="field">
+          <span class="field-label">Votre pseudo</span>
+          <input id="input-name" type="text" maxlength="14" value="Joueur" required>
+        </label>
+
+        <fieldset class="field">
+          <legend class="field-label">Nombre de bots</legend>
+          <div class="segmented">
+            <label><input type="radio" name="bots" value="3"><span>3</span></label>
+            <label><input type="radio" name="bots" value="4" checked><span>4</span></label>
+            <label><input type="radio" name="bots" value="5"><span>5</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field-label">Difficulté</legend>
+          <div class="segmented">
+            <label><input type="radio" name="difficulty" value="facile"><span>Facile</span></label>
+            <label><input type="radio" name="difficulty" value="moyen" checked><span>Moyen</span></label>
+            <label><input type="radio" name="difficulty" value="difficile"><span>Difficile</span></label>
+          </div>
+          <p class="field-hint" id="difficulty-hint"></p>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary btn-large">Commencer la partie</button>
+      </form>
+
+      <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu.</p>
+    </div>
+  </section>
+
+  <!-- ============ Écran de jeu ============ -->
+  <section id="screen-game" class="screen" aria-label="Table de poker">
+    <header class="topbar">
+      <div class="topbar-info">
+        <span id="info-hand" class="pill">Main n°1</span>
+        <span id="info-blinds" class="pill">Blinds 10 / 20</span>
+        <span id="info-difficulty" class="pill pill-muted">Moyen</span>
+      </div>
+      <div class="topbar-actions">
+        <button id="btn-log" class="btn btn-ghost btn-small" type="button" aria-controls="log-panel">Historique</button>
+        <button id="btn-quit" class="btn btn-ghost btn-small" type="button">Quitter</button>
+      </div>
+    </header>
+
+    <div class="game-layout">
+      <main class="table-zone">
+        <div class="table-wrap" id="table-wrap">
+          <div class="table" id="table">
+            <div class="table-center">
+              <div class="pot" id="pot"><span class="chip-icon" aria-hidden="true"></span><span id="pot-amount">Pot : 0</span></div>
+              <div class="side-pots" id="side-pots"></div>
+              <div class="board" id="board" aria-label="Cartes communes"></div>
+              <div class="street-label" id="street-label"></div>
+            </div>
+            <div class="result-banner" id="result-banner" hidden></div>
+            <!-- Les sièges des joueurs sont ajoutés ici par ui.js -->
+          </div>
+        </div>
+
+        <div class="controls" id="controls">
+          <p class="controls-status" id="controls-status" aria-live="polite"></p>
+
+          <div class="action-panel" id="action-panel" hidden>
+            <div class="raise-row" id="raise-row">
+              <div class="presets">
+                <button type="button" class="btn btn-chip" data-preset="half">½ pot</button>
+                <button type="button" class="btn btn-chip" data-preset="pot">Pot</button>
+                <button type="button" class="btn btn-chip" data-preset="allin">Tapis</button>
+              </div>
+              <div class="slider-row">
+                <button type="button" class="btn btn-chip btn-step" id="raise-minus" aria-label="Diminuer la relance">−</button>
+                <input type="range" id="raise-slider" min="0" max="100" step="1" aria-label="Montant de la relance">
+                <button type="button" class="btn btn-chip btn-step" id="raise-plus" aria-label="Augmenter la relance">+</button>
+                <output id="raise-value" for="raise-slider">0</output>
+              </div>
+            </div>
+            <div class="main-actions">
+              <button type="button" class="btn btn-fold" id="btn-fold">Se coucher</button>
+              <button type="button" class="btn btn-call" id="btn-call">Checker</button>
+              <button type="button" class="btn btn-raise" id="btn-raise">Relancer</button>
+              <button type="button" class="btn btn-allin" id="btn-allin">Tapis</button>
+            </div>
+          </div>
+
+          <div class="next-panel" id="next-panel" hidden>
+            <button type="button" class="btn btn-primary" id="btn-next">Main suivante</button>
+          </div>
+        </div>
+      </main>
+
+      <aside class="log-panel" id="log-panel" aria-label="Historique des actions">
+        <div class="log-header">
+          <h2>Historique</h2>
+          <button type="button" class="btn btn-ghost btn-small log-close" id="btn-log-close" aria-label="Fermer l'historique">✕</button>
+        </div>
+        <ol class="log-list" id="log-list"></ol>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ Écran de fin de partie ============ -->
+  <section id="screen-end" class="screen" aria-labelledby="end-title">
+    <div class="home-card end-card">
+      <div class="end-icon" id="end-icon" aria-hidden="true">🏆</div>
+      <h1 id="end-title">Partie terminée</h1>
+      <p class="home-subtitle" id="end-subtitle"></p>
+      <ol class="ranking" id="end-ranking"></ol>
+      <div class="end-actions">
+        <button type="button" class="btn btn-primary btn-large" id="btn-replay">Rejouer</button>
+        <button type="button" class="btn btn-ghost" id="btn-settings">Changer les réglages</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/deck.js"></script>
+  <script src="js/handEvaluator.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/bot.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
