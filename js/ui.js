@@ -16,7 +16,7 @@
 
   const Poker = root.Poker;
   const { RANK_LABELS, SUIT_SYMBOLS, isRed, cardName, cardLabel, shuffle } = Poker.Cards;
-  const { PokerGame, PHASE, PHASE_LABELS, GameRunner, Net } = Poker;
+  const { PokerGame, PHASE, PHASE_LABELS, GameRunner, Net, Looks } = Poker;
   const fmt = Poker.formatChips;
 
   const MAX_SEATS = 6;
@@ -489,7 +489,8 @@
       this.teardown();
       this.mode = 'solo';
       const { name, bots, difficulty } = this.settings;
-      const players = [{ name, kind: 'local' }].concat(pickBotNames(bots, [name]).map((n) => ({ name: n, kind: 'bot' })));
+      const players = [{ name, kind: 'local', look: Poker.Account.look }]
+        .concat(pickBotNames(bots, [name]).map((n) => ({ name: n, kind: 'bot' })));
       const game = new PokerGame({ players, startingChips: STARTING_CHIPS, handsPerLevel: HANDS_PER_LEVEL });
       this.accountUi.beginGame(players.length); // mise prélevée si connecté
       this.startRunner(game, { difficulty, multiplayer: false });
@@ -593,6 +594,7 @@
         existing.conn = conn;
         existing.connected = true;
         existing.lastSeen = Date.now();
+        if (!lobby.started) existing.look = Looks.sanitize(message.look);
         net.send(conn, { t: 'welcome', code: lobby.code, name: existing.name });
         if (lobby.started && existing.seat != null && this.runner) {
           net.send(conn, { t: 'logs', entries: this.runner.game.history.slice(-150) });
@@ -617,7 +619,11 @@
       let name = base;
       for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base.slice(0, 12)} ${i}`;
 
-      lobby.guests.push({ token, name, conn, connected: true, seat: null, lastSeen: Date.now(), account: !!message.account });
+      lobby.guests.push({
+        token, name, conn, connected: true, seat: null, lastSeen: Date.now(),
+        account: !!message.account,
+        look: Looks.sanitize(message.look), // apparence vérifiée (cadre connu, photo du stockage du projet)
+      });
       lobby.bots = Math.min(lobby.bots, MAX_SEATS - 1 - lobby.guests.length);
       net.send(conn, { t: 'welcome', code: lobby.code, name });
       this.broadcastLobby();
@@ -649,8 +655,8 @@
       return {
         t: 'lobby',
         code: lobby.code,
-        players: [{ name: lobby.hostName, host: true, account: Poker.Account.signedIn }]
-          .concat(lobby.guests.map((g) => ({ name: g.name, account: g.account }))),
+        players: [{ name: lobby.hostName, host: true, account: Poker.Account.signedIn, look: Poker.Account.look }]
+          .concat(lobby.guests.map((g) => ({ name: g.name, account: g.account, look: g.look }))),
         bots: lobby.bots,
         difficulty: lobby.difficulty,
       };
@@ -679,8 +685,8 @@
       if (1 + guests.length + lobby.bots < 2) return;
 
       const humans = [lobby.hostName].concat(guests.map((g) => g.name));
-      const players = [{ name: lobby.hostName, kind: 'local' }]
-        .concat(guests.map((g) => ({ name: g.name, kind: 'remote' })))
+      const players = [{ name: lobby.hostName, kind: 'local', look: Poker.Account.look }]
+        .concat(guests.map((g) => ({ name: g.name, kind: 'remote', look: g.look })))
         .concat(pickBotNames(lobby.bots, humans).map((n) => ({ name: n, kind: 'bot' })));
       guests.forEach((g, i) => { g.seat = i + 1; });
       lobby.guests = guests;
@@ -750,7 +756,7 @@
           else this.leaveToHome('La connexion avec la table a été perdue.');
         }
       });
-      net.send({ t: 'join', name: this.settings.name, token: this.token, account: Poker.Account.signedIn });
+      net.send({ t: 'join', name: this.settings.name, token: this.token, account: Poker.Account.signedIn, look: Poker.Account.look });
       // Sans réponse de l'hôte, on abandonne.
       setTimeout(() => {
         if (this.mode === 'client' && this.net === net && this.homeBusy) this.leaveToHome('La table ne répond pas.');
@@ -824,12 +830,12 @@
       el.lobbyCount.textContent = `${total} / ${MAX_SEATS}`;
       const items = payload.players.map((p) => {
         const me = isHost ? p.host : p.name === this.myName;
-        return `<li><span class="avatar${p.host ? ' host' : ''}">${escapeHtml(p.name.charAt(0).toUpperCase())}</span>` +
+        return `<li>${Looks.avatarHtml({ name: p.name, look: p.look, variant: p.host ? 'host' : 'person' })}` +
           `<span class="lobby-name">${escapeHtml(p.name)}${me ? ' (vous)' : ''}</span>` +
           `<span class="tag">${p.host ? 'Hôte' : p.account ? 'Compte' : 'Invité'}</span></li>`;
       });
       for (let i = 0; i < payload.bots; i++) {
-        items.push('<li class="bot"><span class="avatar bot">🤖</span><span class="lobby-name">Bot</span>' +
+        items.push(`<li class="bot">${Looks.avatarHtml({ name: 'Bot', variant: 'bot', content: '🤖' })}<span class="lobby-name">Bot</span>` +
           `<span class="tag">${escapeHtml(payload.difficulty)}</span></li>`);
       }
       el.lobbyPlayers.innerHTML = items.join('');
@@ -1038,7 +1044,7 @@
         seat.innerHTML = `
           <div class="seat-cards"></div>
           <div class="seat-box">
-            <div class="avatar ${avatarClass}" aria-hidden="true">${escapeHtml(player.name.charAt(0).toUpperCase())}</div>
+            ${Looks.avatarHtml({ name: player.name, look: player.look, variant: avatarClass })}
             <div class="seat-text">
               <div class="seat-name">${escapeHtml(player.name)}</div>
               <div class="seat-chips"></div>

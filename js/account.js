@@ -19,6 +19,10 @@
 
   /** Messages d'erreur Supabase (en anglais) → français. */
   const ERROR_TRANSLATIONS = [
+    [/bucket not found/i, 'Le stockage des photos n’est pas installé : exécutez à nouveau supabase/schema.sql dans Supabase.'],
+    [/row-level security|unauthorized/i, 'Envoi refusé par la base de données : exécutez à nouveau supabase/schema.sql dans Supabase.'],
+    [/payload too large|maximum allowed size|exceeded/i, 'Image trop lourde.'],
+    [/mime type|invalid_mime/i, 'Format d’image non accepté (JPEG, PNG ou WebP).'],
     [/could not find the function|function .* does not exist|schema cache/i, 'La base de données n’est pas à jour : exécutez à nouveau supabase/schema.sql dans Supabase.'],
     [/relation .* does not exist|could not find the table/i, 'La base de données n’est pas installée : exécutez supabase/schema.sql dans Supabase.'],
     [/permission denied/i, 'Accès refusé à la base de données : exécutez à nouveau supabase/schema.sql dans Supabase.'],
@@ -224,6 +228,59 @@
     /* ---------------------------------------------------------------- */
     /* Profil et jetons                                                  */
     /* ---------------------------------------------------------------- */
+
+    /** Adresse publique de la photo de profil, ou null. */
+    get avatarUrl() {
+      const path = this.profile && this.profile.avatar_path;
+      if (!path || !this.client) return null;
+      return this.client.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    }
+
+    /** Apparence du joueur connecté (cadre + photo), envoyée aussi aux autres joueurs en ligne. */
+    get look() {
+      if (!this.signedIn) return null;
+      return { avatar: this.avatarUrl, frame: this.profile.frame || 'or' };
+    }
+
+    async setFrame(frame) {
+      this.profile = await this.rpc('set_frame', { p_frame: frame });
+      this.emit('PROFILE');
+      return this.profile;
+    }
+
+    /**
+     * Envoie une nouvelle photo (déjà recadrée par Poker.Looks.prepareAvatar) puis l'enregistre.
+     * Chaque envoi a un nom unique (pas de souci de cache) ; l'ancienne photo est supprimée ensuite.
+     */
+    async uploadAvatar({ blob, ext, type }) {
+      const client = this.requireClient();
+      if (!this.user) throw new Error('Vous devez être connecté.');
+      const path = `${this.user.id}/avatar-${Date.now()}.${ext}`;
+      const { error } = await client.storage.from('avatars').upload(path, blob, {
+        contentType: type,
+        cacheControl: '31536000',
+        upsert: false,
+      });
+      if (error) throw new Error(translateError(error));
+      const previous = this.profile && this.profile.avatar_path;
+      try {
+        this.profile = await this.rpc('set_avatar', { p_path: path });
+      } catch (rpcError) {
+        client.storage.from('avatars').remove([path]).catch(() => {});
+        throw rpcError;
+      }
+      if (previous && previous !== path) client.storage.from('avatars').remove([previous]).catch(() => {});
+      this.emit('PROFILE');
+      return this.profile;
+    }
+
+    async removeAvatar() {
+      const previous = this.profile && this.profile.avatar_path;
+      this.profile = await this.rpc('set_avatar', { p_path: null });
+      if (previous) this.requireClient().storage.from('avatars').remove([previous]).catch(() => {});
+      this.emit('PROFILE');
+      return this.profile;
+    }
 
     /** Le pseudo est-il libre ? (en cas de panne du service, on ne bloque pas le joueur) */
     async isPseudoAvailable(pseudo) {

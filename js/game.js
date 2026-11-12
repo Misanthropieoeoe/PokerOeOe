@@ -83,6 +83,7 @@
         name: p.name,
         kind: p.kind || (p.isHuman ? 'local' : 'bot'),
         isHuman: p.kind ? p.kind !== 'bot' : !!p.isHuman,
+        look: p.look || null,   // apparence (cadre, photo) des joueurs avec un compte
         connected: true,
         chips: p.chips != null ? p.chips : startingChips,
         hand: [],
@@ -636,6 +637,7 @@
           name: p.name,
           kind: p.kind,
           isHuman: p.isHuman,
+          look: p.look,
           connected: p.connected,
           chips: p.chips,
           bet: p.bet,

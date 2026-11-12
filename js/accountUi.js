@@ -11,6 +11,7 @@
 
   const Poker = root.Poker;
   const Account = Poker.Account;
+  const Looks = Poker.Looks;
   const { PHASE } = Poker;
   const fmt = Poker.formatChips;
 
@@ -53,6 +54,11 @@
         authSuccess: byId('auth-success'),
         btnGuest: byId('btn-auth-guest'),
         profileAvatar: byId('profile-avatar'),
+        avatarFile: byId('avatar-file'),
+        avatarFileText: byId('avatar-file-text'),
+        avatarFileLabel: byId('label-avatar-file'),
+        btnAvatarRemove: byId('btn-avatar-remove'),
+        frameGrid: byId('frame-grid'),
         profileTitle: byId('profile-title'),
         profileEmail: byId('profile-email'),
         profileChips: byId('profile-chips'),
@@ -169,6 +175,38 @@
           return 'Pseudo modifié.';
         });
       });
+      // Apparence : photo et cadre
+      el.avatarFile.addEventListener('change', () => {
+        const file = el.avatarFile.files && el.avatarFile.files[0];
+        el.avatarFile.value = ''; // permet de rechoisir le même fichier
+        if (!file) return;
+        this.setPhotoBusy(true);
+        this.runProfile(async () => {
+          try {
+            const prepared = await Looks.prepareAvatar(file);
+            await Account.uploadAvatar(prepared);
+            return 'Photo de profil mise à jour.';
+          } finally {
+            this.setPhotoBusy(false);
+          }
+        });
+      });
+      el.btnAvatarRemove.addEventListener('click', () => {
+        this.runProfile(async () => {
+          await Account.removeAvatar();
+          return 'Photo retirée.';
+        });
+      });
+      el.frameGrid.addEventListener('change', (event) => {
+        const frame = event.target.value;
+        if (!frame || !Account.profile || frame === Account.profile.frame) return;
+        this.runProfile(async () => {
+          await Account.setFrame(frame);
+          const chosen = Looks.FRAMES.find((f) => f.id === frame);
+          return `Cadre « ${chosen ? chosen.name : frame} » appliqué.`;
+        });
+      });
+
       document.getElementById('btn-profile-back').addEventListener('click', () => this.app.showScreen('home'));
       document.getElementById('btn-signout').addEventListener('click', () => {
         this.runProfile(async () => {
@@ -202,7 +240,7 @@
       if (Account.signedIn) {
         const p = Account.profile;
         bar.innerHTML =
-          `<span class="avatar me" aria-hidden="true">${escapeHtml(p.pseudo.charAt(0).toUpperCase())}</span>` +
+          Looks.avatarHtml({ name: p.pseudo, look: Account.look, variant: 'me' }) +
           `<span class="account-status"><strong>${escapeHtml(p.pseudo)}</strong><span>${fmt(p.chips)} jetons</span></span>` +
           '<span class="account-buttons">' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>' +
@@ -360,7 +398,16 @@
       const { el } = this;
       const p = Account.profile;
       if (!p) return;
-      el.profileAvatar.textContent = p.pseudo.charAt(0).toUpperCase();
+      const look = Account.look;
+      el.profileAvatar.innerHTML = Looks.avatarHtml({ name: p.pseudo, look, variant: 'me', className: 'profile-avatar' });
+      el.btnAvatarRemove.hidden = !p.avatar_path;
+      // Aperçu de chaque cadre avec sa propre photo (ou son initiale)
+      el.frameGrid.innerHTML = Looks.FRAMES.map((frame) => {
+        const checked = (p.frame || 'or') === frame.id ? ' checked' : '';
+        return `<label class="frame-option"><input type="radio" name="frame" value="${frame.id}"${checked}>` +
+          Looks.avatarHtml({ name: p.pseudo, look: { avatar: look.avatar, frame: frame.id }, variant: 'me' }) +
+          `<span>${frame.name}</span></label>`;
+      }).join('');
       el.profileTitle.textContent = p.pseudo;
       el.profileEmail.textContent = Account.user ? Account.user.email : '';
       el.profileChips.textContent = fmt(p.chips);
@@ -384,6 +431,12 @@
         ['Membre depuis', since],
       ];
       el.stats.innerHTML = stats.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('');
+    }
+
+    setPhotoBusy(busy) {
+      this.el.avatarFileLabel.classList.toggle('busy', busy);
+      this.el.avatarFile.disabled = busy;
+      this.el.avatarFileText.textContent = busy ? 'Envoi de la photo…' : 'Changer la photo';
     }
 
     profileMessage(text, success = false) {

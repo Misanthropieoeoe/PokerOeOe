@@ -42,6 +42,18 @@ create table if not exists public.games (
 );
 create index if not exists games_user_idx on public.games (user_id);
 
+-- Personnalisation du profil : cadre de couleur et photo (chemin dans le stockage « avatars »)
+alter table public.profiles add column if not exists frame text not null default 'or';
+alter table public.profiles add column if not exists avatar_path text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'profiles_frame_check') then
+    alter table public.profiles add constraint profiles_frame_check
+      check (frame in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel'));
+  end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Sécurité au niveau des lignes : lecture de ses propres données uniquement
 -- ---------------------------------------------------------------------------
@@ -177,6 +189,46 @@ begin
 end;
 $$;
 
+-- Choisir le cadre de son avatar
+create or replace function public.set_frame(p_frame text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid    uuid := auth.uid();
+  result public.profiles;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  if p_frame is null or p_frame not in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel') then
+    raise exception 'Cadre inconnu.';
+  end if;
+  update public.profiles set frame = p_frame where id = uid returning * into result;
+  return result;
+end;
+$$;
+
+-- Enregistrer (ou retirer, avec null) sa photo, déjà envoyée dans son dossier du stockage « avatars »
+create or replace function public.set_avatar(p_path text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid    uuid := auth.uid();
+  result public.profiles;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  if p_path is not null and p_path !~ ('^' || uid::text || '/avatar-[0-9]{1,16}\.(webp|jpg|png)$') then
+    raise exception 'Chemin de photo invalide.';
+  end if;
+  update public.profiles set avatar_path = p_path where id = uid returning * into result;
+  return result;
+end;
+$$;
+
 -- Début de partie : prélève la mise (1 000 jetons) et ouvre une partie
 create or replace function public.start_game(p_players integer)
 returns bigint
@@ -284,6 +336,39 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Stockage des photos de profil (bucket public « avatars », 512 Ko max par image)
+-- Chaque joueur ne peut écrire que dans son dossier : avatars/<son identifiant>/…
+-- ---------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 524288, array['image/webp', 'image/jpeg', 'image/png'])
+on conflict (id) do update
+  set public = true,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Avatars : lecture de son dossier" on storage.objects;
+create policy "Avatars : lecture de son dossier" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Avatars : envoi dans son dossier" on storage.objects;
+create policy "Avatars : envoi dans son dossier" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Avatars : remplacement dans son dossier" on storage.objects;
+create policy "Avatars : remplacement dans son dossier" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Avatars : suppression dans son dossier" on storage.objects;
+create policy "Avatars : suppression dans son dossier" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------------------------
 -- Droits d'exécution
 -- ---------------------------------------------------------------------------
 
@@ -292,6 +377,8 @@ revoke all on function public.free_pseudo(text) from public;
 revoke all on function public.ensure_profile() from public;
 revoke all on function public.pseudo_available(text) from public;
 revoke all on function public.set_pseudo(text) from public;
+revoke all on function public.set_frame(text) from public;
+revoke all on function public.set_avatar(text) from public;
 revoke all on function public.start_game(integer) from public;
 revoke all on function public.finish_game(bigint, bigint, integer, integer, bigint) from public;
 revoke all on function public.refill_chips() from public;
@@ -299,6 +386,8 @@ revoke all on function public.refill_chips() from public;
 grant execute on function public.pseudo_available(text) to anon, authenticated;
 grant execute on function public.ensure_profile() to authenticated;
 grant execute on function public.set_pseudo(text) to authenticated;
+grant execute on function public.set_frame(text) to authenticated;
+grant execute on function public.set_avatar(text) to authenticated;
 grant execute on function public.start_game(integer) to authenticated;
 grant execute on function public.finish_game(bigint, bigint, integer, integer, bigint) to authenticated;
 grant execute on function public.refill_chips() to authenticated;

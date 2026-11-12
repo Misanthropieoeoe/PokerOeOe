@@ -19,6 +19,8 @@ Sur l'accueil, on peut jouer **en invité** (rien n'est enregistré) ou **se con
 et un mot de passe. Un compte apporte :
 
 - un **pseudo réservé** (un invité ne peut pas le prendre) ;
+- une **apparence personnalisée** : photo de profil (recadrée et allégée automatiquement) et cadre de couleur
+  (Or, Argent, Rubis, Émeraude, Saphir, Améthyste, Néon, Arc-en-ciel), visibles aussi par les autres joueurs en ligne ;
 - des **statistiques** : parties jouées, victoires, meilleure place, mains gagnées, plus gros pot ;
 - un **solde de jetons fictifs** : chaque partie coûte une mise de 1 000 jetons, on récupère ses jetons
   restants à la fin (quitter en cours de partie fait perdre la mise). Recharge gratuite à 1 000 jetons
@@ -27,6 +29,8 @@ et un mot de passe. Un compte apporte :
 Les comptes utilisent [Supabase](https://supabase.com) (gratuit). Mise en place :
 
 1. Dans le projet Supabase : **SQL Editor → New query**, coller le contenu de `supabase/schema.sql`, puis **Run**.
+   Le script crée aussi l'espace de stockage des photos (« avatars »). Il peut être relancé sans risque
+   après chaque mise à jour du jeu.
 2. **Authentication → URL Configuration** : mettre l'adresse du site (ex. `https://misanthropieoeoe.github.io/PokerOeOe/`)
    dans **Site URL** et dans **Redirect URLs** (liens de confirmation et de mot de passe oublié).
 3. Renseigner l'URL du projet et la clé **publique** (`sb_publishable_…` ou « anon ») dans `js/config.js`.
@@ -70,6 +74,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 | `js/config.js` | Adresse et clé publique du projet Supabase |
 | `js/account.js` | Comptes : inscription, connexion, profil, mise et fin de partie (Supabase) |
 | `js/accountUi.js` | Écrans « Mon compte » et « Mon profil », barre de compte |
+| `js/looks.js` | Apparence : cadres, photos de profil (recadrage, vérification) |
 | `supabase/schema.sql` | Base de données des comptes : tables, règles d'accès, fonctions |
 | `style.css` | Table, cartes en CSS, mise en page responsive |
 

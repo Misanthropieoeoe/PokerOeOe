@@ -125,12 +125,27 @@
   <section id="screen-profile" class="screen" aria-labelledby="profile-title">
     <div class="home-card profile-card">
       <div class="profile-head">
-        <span class="avatar me profile-avatar" id="profile-avatar" aria-hidden="true">J</span>
+        <span class="profile-avatar-slot" id="profile-avatar"></span>
         <div class="profile-ident">
           <h1 id="profile-title">Joueur</h1>
           <p class="home-subtitle" id="profile-email"></p>
         </div>
       </div>
+
+      <section class="look-editor" aria-labelledby="look-title">
+        <h2 class="section-title" id="look-title">Apparence</h2>
+        <div class="photo-buttons">
+          <label class="btn btn-ghost btn-small file-button" id="label-avatar-file">
+            <span id="avatar-file-text">Changer la photo</span>
+            <input type="file" id="avatar-file" accept="image/*">
+          </label>
+          <button type="button" class="btn btn-ghost btn-small" id="btn-avatar-remove">Retirer la photo</button>
+        </div>
+        <fieldset class="frame-picker">
+          <legend class="field-label">Cadre</legend>
+          <div class="frame-grid" id="frame-grid"></div>
+        </fieldset>
+      </section>
 
       <div class="balance">
         <span class="field-label">Solde</span>
@@ -295,6 +310,7 @@
   <script src="js/session.js"></script>
   <script src="js/net.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/looks.js"></script>
   <script src="js/account.js"></script>
   <script src="js/accountUi.js"></script>
   <script src="js/ui.js"></script>
