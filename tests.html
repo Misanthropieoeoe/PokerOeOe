@@ -37,6 +37,7 @@
 <script src="js/deck.js"></script>
 <script src="js/handEvaluator.js"></script>
 <script src="js/game.js"></script>
+<script src="js/rules.js"></script>
 <script>
 (function () {
   'use strict';
@@ -310,6 +311,30 @@
     const legalA = game.getLegalActions(0);
     assertEqual(legalA.canRaise, false, 'A ne peut que suivre ou se coucher');
     assertEqual(legalA.toCall, 30);
+  });
+
+  /* ================================================================= */
+  group('Fenêtre « Règles » : exemples de combinaisons');
+
+  Poker.Rules.EXAMPLES.forEach((ex) => {
+    test(`${ex.name} : ${ex.cards}`, () => {
+      const h = hand(ex.cards);
+      assertEqual(h.category, ex.category, 'catégorie');
+      // Les cartes mises en avant sont celles qui forment la combinaison (sans les kickers)
+      const cards = parseCards(ex.cards);
+      const core = ex.core.map((i) => cards[i]);
+      const counts = {};
+      cards.forEach((c) => { counts[c.rank] = (counts[c.rank] || 0) + 1; });
+      const expectedCore = [CATEGORY.PAIR, CATEGORY.TWO_PAIR, CATEGORY.THREE_OF_A_KIND, CATEGORY.FOUR_OF_A_KIND].includes(ex.category)
+        ? cards.filter((c) => counts[c.rank] >= 2)
+        : ex.category === CATEGORY.HIGH_CARD ? [cards.reduce((a, b) => (b.rank > a.rank ? b : a))] : cards;
+      assertEqual(core.map((c) => c.id).sort(), expectedCore.map((c) => c.id).sort(), 'cartes mises en avant');
+      return h.name;
+    });
+  });
+  test('Exemples rangés du plus fort au plus faible', () => {
+    const hands = Poker.Rules.EXAMPLES.map((ex) => hand(ex.cards));
+    for (let i = 1; i < hands.length; i++) assert(compareHands(hands[i - 1], hands[i]) > 0, `${i} avant ${i + 1}`);
   });
 
   /* ================================================================= */

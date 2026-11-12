@@ -86,7 +86,10 @@
         <button type="submit" class="btn btn-primary btn-large" id="btn-start">Commencer la partie</button>
       </form>
 
-      <button type="button" class="btn btn-ghost btn-leaderboard" id="btn-leaderboard">🏆 Classement</button>
+      <div class="home-links">
+        <button type="button" class="btn btn-ghost" data-open-rules="regles">📖 Règles du poker</button>
+        <button type="button" class="btn btn-ghost" id="btn-leaderboard">🏆 Classement</button>
+      </div>
 
       <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu. Le jeu en ligne nécessite une connexion Internet.</p>
     </div>
@@ -238,6 +241,83 @@
     </div>
   </section>
 
+  <!-- ============ Règles du poker ============ -->
+  <dialog class="rules-dialog" id="rules-dialog" aria-labelledby="rules-title">
+    <div class="rules-head">
+      <h2 id="rules-title">Le Texas Hold'em</h2>
+      <button type="button" class="btn btn-ghost btn-small" id="btn-rules-close" aria-label="Fermer les règles">✕</button>
+    </div>
+    <div class="segmented rules-tabs" role="radiogroup" aria-label="Partie des règles">
+      <label><input type="radio" name="rules-tab" value="regles" checked><span>Règles</span></label>
+      <label><input type="radio" name="rules-tab" value="mains"><span>Combinaisons</span></label>
+    </div>
+
+    <div class="rules-body">
+      <!-- Règles -->
+      <section data-rules="regles">
+        <h3>Le but</h3>
+        <p>Gagner les jetons des autres joueurs. À chaque main, on remporte le <strong>pot</strong> (les jetons misés au
+          centre) de deux façons : tous les autres se couchent, ou l’on a la meilleure combinaison à l’abattage.</p>
+        <p>Chaque joueur reçoit <strong>2 cartes cachées</strong>, puis <strong>5 cartes communes</strong> sont posées au
+          centre. On forme la meilleure combinaison de <strong>5 cartes</strong> parmi ces 7 : avec ses deux cartes, une
+          seule, ou même aucune (on « joue le tableau »).</p>
+
+        <h3>Le déroulement d’une main</h3>
+        <ol class="rules-steps">
+          <li><strong>Les blinds.</strong> Les deux joueurs à gauche du bouton <span class="badge badge-dealer">D</span>
+            misent d’office : la petite blinde <span class="badge badge-sb">SB</span> et la grosse blinde
+            <span class="badge badge-bb">BB</span>. Le bouton avance d’une place à chaque main.</li>
+          <li><strong>Pré-flop.</strong> Chacun reçoit ses 2 cartes. Premier tour d’enchères, en commençant par le joueur à
+            gauche de la grosse blinde.</li>
+          <li><strong>Flop.</strong> 3 cartes communes sont retournées. Deuxième tour d’enchères (à partir de la gauche du bouton).</li>
+          <li><strong>Turn.</strong> Une 4e carte commune. Troisième tour d’enchères.</li>
+          <li><strong>River.</strong> La 5e et dernière carte. Dernier tour d’enchères.</li>
+          <li><strong>Abattage.</strong> Les joueurs encore en jeu montrent leurs cartes : la meilleure combinaison gagne le pot.
+            En cas d’égalité parfaite, le pot est partagé.</li>
+        </ol>
+
+        <h3>Les actions</h3>
+        <dl class="rules-actions">
+          <div><dt>Se coucher</dt><dd>Abandonner la main et les jetons déjà misés.</dd></div>
+          <div><dt>Checker</dt><dd>Passer son tour sans miser, possible seulement si personne n’a misé.</dd></div>
+          <div><dt>Suivre</dt><dd>Mettre autant que la mise la plus haute pour rester dans la main.</dd></div>
+          <div><dt>Miser / Relancer</dt><dd>Augmenter la mise. En No Limit, on peut miser tout son tapis ; une relance
+            doit être au moins aussi grande que la précédente.</dd></div>
+          <div><dt>Tapis</dt><dd>Miser tous ses jetons. Un joueur à tapis reste dans la main jusqu’à l’abattage.</dd></div>
+        </dl>
+
+        <h3>Tapis et pots annexes</h3>
+        <p>Un joueur à tapis ne peut gagner que ce qu’il a pu suivre de chaque adversaire. Les jetons misés au-delà forment
+          un <strong>pot annexe</strong>, disputé entre les joueurs qui ont encore des jetons.</p>
+
+        <h3>Conseils pour débuter</h3>
+        <ul class="rules-tips">
+          <li>Jouez peu de mains : les paires, les As et les grosses cartes assorties (As-Roi, Roi-Dame…).</li>
+          <li>Parler en dernier (près du bouton) est un avantage : vous voyez ce que font les autres.</li>
+          <li>Pensez à la <strong>cote du pot</strong> : suivre 20 pour gagner un pot de 100 vaut le coup si vous avez
+            de bonnes chances de toucher votre carte.</li>
+          <li>Les blinds augmentent toutes les 10 mains : plus la partie avance, plus il faut oser.</li>
+        </ul>
+      </section>
+
+      <!-- Combinaisons -->
+      <section data-rules="mains" hidden>
+        <p class="rules-intro">De la plus forte à la plus faible. Les cartes en clair forment la combinaison ; les autres
+          servent à départager. Le pourcentage est la probabilité de l’obtenir avec 7 cartes.</p>
+        <ol class="hand-ranks" id="hand-ranks"></ol>
+
+        <h3>Départager deux mains</h3>
+        <ul class="rules-tips">
+          <li>À combinaison égale, la plus haute gagne : une paire de Rois bat une paire de Dames.</li>
+          <li>Ensuite on compare les cartes restantes, les <strong>kickers</strong> : A-A-R-9-4 bat A-A-D-V-10.</li>
+          <li>Pour un full, le brelan compte d’abord, puis la paire. Pour une double paire, la plus haute paire, puis l’autre,
+            puis le kicker.</li>
+          <li>Les couleurs (♠ ♥ ♦ ♣) ne départagent jamais : si les 5 meilleures cartes ont les mêmes valeurs, le pot est partagé.</li>
+        </ul>
+      </section>
+    </div>
+  </dialog>
+
   <!-- ============ Recadrage de la photo ============ -->
   <div class="crop-dialog" id="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="crop-title" hidden>
     <div class="home-card crop-card">
@@ -309,6 +389,7 @@
         <span id="info-ranked" class="pill pill-ranked" hidden>Classée</span>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-ghost btn-small btn-rules-top" type="button" data-open-rules="mains" title="Règles et combinaisons" aria-label="Règles et combinaisons">Règles</button>
         <button id="btn-log" class="btn btn-ghost btn-small" type="button" aria-controls="log-panel">Historique</button>
         <button id="btn-quit" class="btn btn-ghost btn-small" type="button">Quitter</button>
       </div>
@@ -398,6 +479,7 @@
   <script src="js/accountUi.js"></script>
   <script src="js/ranked.js"></script>
   <script src="js/tables.js"></script>
+  <script src="js/rules.js"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>
