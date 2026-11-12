@@ -77,6 +77,12 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 - L'hôte doit garder la page ouverte pendant la partie.
 - Limites : certains réseaux très restrictifs (entreprise, certains réseaux mobiles) bloquent les connexions directes.
 
+## Mise à jour du site
+
+`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121536`).
+Après chaque modification, changez ce numéro (le même partout) : les navigateurs rechargent alors les
+nouveaux fichiers au lieu de garder les anciens en cache (GitHub Pages autorise jusqu'à 10 minutes de cache).
+
 ## Autres pages et options
 
 - `tests.html` : tests de l'évaluateur de mains et des side pots.
