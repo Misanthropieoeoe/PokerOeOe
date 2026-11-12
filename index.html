@@ -10,7 +10,7 @@
   <link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=202611121604">
+  <link rel="stylesheet" href="style.css?v=202611121611">
 </head>
 <body>
 
@@ -256,8 +256,10 @@
     </div>
     <div class="rules-body bonus-body">
       <div class="bonus-chips" aria-hidden="true"><span></span><span></span><span></span></div>
-      <p class="bonus-amount"><strong>+250</strong> jetons</p>
-      <p class="bonus-text" id="bonus-text">Toutes les heures, récupérez 250 jetons gratuits.</p>
+      <p class="bonus-amount"><strong id="bonus-amount">+250</strong> jetons</p>
+      <div class="bonus-pips" id="bonus-pips" role="img" aria-label="Bonus accumulés"></div>
+      <p class="bonus-count" id="bonus-count"></p>
+      <p class="bonus-text" id="bonus-text">250 jetons gratuits s’accumulent chaque heure, jusqu’à 8 (2 000 jetons).</p>
       <p class="bonus-timer" id="bonus-timer" aria-live="polite"></p>
       <button type="button" class="btn btn-primary btn-large" id="btn-bonus-claim">Récupérer 250 jetons</button>
       <p class="form-error" id="bonus-error" role="alert" hidden></p>
@@ -514,21 +516,21 @@
     </div>
   </section>
 
-  <script src="js/deck.js?v=202611121604"></script>
-  <script src="js/handEvaluator.js?v=202611121604"></script>
-  <script src="js/game.js?v=202611121604"></script>
-  <script src="js/bot.js?v=202611121604"></script>
-  <script src="js/session.js?v=202611121604"></script>
-  <script src="js/net.js?v=202611121604"></script>
-  <script src="js/config.js?v=202611121604"></script>
-  <script src="js/looks.js?v=202611121604"></script>
-  <script src="js/account.js?v=202611121604"></script>
-  <script src="js/accountUi.js?v=202611121604"></script>
-  <script src="js/ranked.js?v=202611121604"></script>
-  <script src="js/tables.js?v=202611121604"></script>
-  <script src="js/bonus.js?v=202611121604"></script>
-  <script src="js/shop.js?v=202611121604"></script>
-  <script src="js/rules.js?v=202611121604"></script>
-  <script src="js/ui.js?v=202611121604"></script>
+  <script src="js/deck.js?v=202611121611"></script>
+  <script src="js/handEvaluator.js?v=202611121611"></script>
+  <script src="js/game.js?v=202611121611"></script>
+  <script src="js/bot.js?v=202611121611"></script>
+  <script src="js/session.js?v=202611121611"></script>
+  <script src="js/net.js?v=202611121611"></script>
+  <script src="js/config.js?v=202611121611"></script>
+  <script src="js/looks.js?v=202611121611"></script>
+  <script src="js/account.js?v=202611121611"></script>
+  <script src="js/accountUi.js?v=202611121611"></script>
+  <script src="js/ranked.js?v=202611121611"></script>
+  <script src="js/tables.js?v=202611121611"></script>
+  <script src="js/bonus.js?v=202611121611"></script>
+  <script src="js/shop.js?v=202611121611"></script>
+  <script src="js/rules.js?v=202611121611"></script>
+  <script src="js/ui.js?v=202611121611"></script>
 </body>
 </html>

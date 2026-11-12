@@ -23,7 +23,7 @@ et un mot de passe. Un compte apporte :
 - une **apparence personnalisée** : photo de profil (on choisit soi-même la partie visible : glisser, zoomer
   ou pincer) et cadre de couleur ;
 - un **bonus horaire** (bouton « 🎁 » de la barre de compte, qui brille quand c'est prêt) : 250 jetons
-  toutes les heures, contrôlé par le serveur ;
+  par heure, cumulables jusqu'à 8 (2 000 jetons), contrôlé par le serveur ;
 - une **boutique** (bouton « 🛍️ Boutique ») : le cadre Or est gratuit, les autres s'achètent avec les jetons
   (Argent 2 000, Rubis / Émeraude / Saphir 3 000, Améthyste 4 000, Néon 7 500, Arc-en-ciel 10 000) ;
   le serveur vérifie le prix et le solde ;
@@ -84,7 +84,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 
 ## Mise à jour du site
 
-`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121604`).
+`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121611`).
 Après chaque modification, changez ce numéro (le même partout) : les navigateurs rechargent alors les
 nouveaux fichiers au lieu de garder les anciens en cache (GitHub Pages autorise jusqu'à 10 minutes de cache).
 

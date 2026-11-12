@@ -910,7 +910,37 @@ begin
 end;
 $$;
 
--- Bonus horaire : 250 jetons, une fois par heure
+-- Bonus horaire : 250 jetons par heure, cumulables jusqu'à 8 (2 000 jetons).
+-- Un compte qui n'a jamais récupéré de bonus en a 1 de disponible.
+create or replace function public.bonus_count(p_last timestamptz)
+returns integer
+language sql
+stable
+as $$
+  select case when p_last is null then 1
+              else least(8, floor(extract(epoch from now() - p_last) / 3600))::integer end;
+$$;
+
+-- État du bonus : nombre disponible, maximum, secondes avant le suivant (null si le maximum est atteint)
+create or replace function public.bonus_status()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'available', public.bonus_count(p.last_bonus_at),
+    'max', 8,
+    'amount', 250,
+    'next_in', case
+      when public.bonus_count(p.last_bonus_at) >= 8 then null
+      when p.last_bonus_at is null then 3600
+      else 3600 - floor(extract(epoch from now() - p.last_bonus_at))::integer % 3600 end)
+  from public.profiles p where p.id = auth.uid();
+$$;
+
+-- Secondes avant au moins un bonus disponible (0 = disponible) — conservée pour compatibilité
 create or replace function public.bonus_wait()
 returns integer
 language sql
@@ -918,11 +948,12 @@ stable
 security definer
 set search_path = public
 as $$
-  -- Secondes avant le prochain bonus (0 = disponible), d'après l'horloge du serveur
-  select greatest(0, ceil(extract(epoch from (p.last_bonus_at + interval '1 hour') - now())))::integer
+  select case when public.bonus_count(p.last_bonus_at) > 0 then 0
+              else greatest(0, ceil(extract(epoch from (p.last_bonus_at + interval '1 hour') - now())))::integer end
   from public.profiles p where p.id = auth.uid();
 $$;
 
+-- Récupère tous les bonus accumulés
 create or replace function public.claim_bonus()
 returns public.profiles
 language plpgsql
@@ -933,17 +964,24 @@ declare
   uid    uuid := auth.uid();
   me     public.profiles;
   result public.profiles;
-  wait   integer;
+  n      integer;
 begin
   if uid is null then raise exception 'Vous devez être connecté.'; end if;
   select * into me from public.profiles where id = uid for update;
   if not found then raise exception 'Profil introuvable.'; end if;
-  if me.last_bonus_at is not null and me.last_bonus_at > now() - interval '1 hour' then
-    wait := ceil(extract(epoch from (me.last_bonus_at + interval '1 hour') - now()) / 60);
-    raise exception 'Prochain bonus dans % min.', wait;
+  n := public.bonus_count(me.last_bonus_at);
+  if n < 1 then
+    raise exception 'Prochain bonus dans % min.',
+      ceil(extract(epoch from (me.last_bonus_at + interval '1 hour') - now()) / 60);
   end if;
-  update public.profiles set chips = chips + 250, last_bonus_at = now()
-   where id = uid returning * into result;
+  update public.profiles
+     set chips = chips + 250 * n,
+         -- Sous le maximum, le temps déjà écoulé vers le bonus suivant est conservé ;
+         -- au maximum, l'accumulation repart de maintenant.
+         last_bonus_at = case when me.last_bonus_at is null or n >= 8 then now()
+                              else me.last_bonus_at + n * interval '1 hour' end
+   where id = uid
+  returning * into result;
   return result;
 end;
 $$;
@@ -1017,6 +1055,7 @@ revoke all on function public.set_frame(text) from public;
 revoke all on function public.buy_frame(text) from public;
 revoke all on function public.claim_bonus() from public;
 revoke all on function public.bonus_wait() from public;
+revoke all on function public.bonus_status() from public;
 revoke all on function public.set_avatar(text) from public;
 revoke all on function public.set_title(text) from public;
 revoke all on function public.grant_frame(text, text) from public, anon, authenticated;
@@ -1044,6 +1083,7 @@ grant execute on function public.set_frame(text) to authenticated;
 grant execute on function public.buy_frame(text) to authenticated;
 grant execute on function public.claim_bonus() to authenticated;
 grant execute on function public.bonus_wait() to authenticated;
+grant execute on function public.bonus_status() to authenticated;
 grant execute on function public.set_avatar(text) to authenticated;
 grant execute on function public.set_title(text) to authenticated;
 grant execute on function public.start_game(integer, bigint) to authenticated;

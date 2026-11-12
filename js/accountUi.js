@@ -278,7 +278,7 @@
           `<span>${fmt(p.chips)} jetons</span></span>` +
           '<span class="account-buttons">' +
           `<button type="button" class="btn btn-ghost btn-small btn-bonus${Account.bonusReady ? ' ready' : ''}" data-act="bonus"` +
-          ` title="Bonus horaire">🎁${Account.bonusReady ? ' Bonus prêt !' : ' Bonus'}</button>` +
+          ` title="Bonus horaire">🎁${Account.bonusCount > 1 ? ` ×${Account.bonusCount}` : Account.bonusReady ? ' Bonus prêt !' : ' Bonus'}</button>` +
           '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
       } else if (Account.user) {

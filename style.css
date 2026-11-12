@@ -1527,3 +1527,18 @@ body.compact .avatar[data-frame="couronne"]::after { font-size: 11px; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(245, 196, 81, 0.6); }
   50% { box-shadow: 0 0 0 6px rgba(245, 196, 81, 0); }
 }
+/* Bonus cumulables : 8 pastilles */
+.bonus-pips { display: flex; gap: 6px; justify-content: center; }
+.bonus-pips span {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+.bonus-pips span.on {
+  background: radial-gradient(circle at 35% 35%, #ffe9a3, var(--gold) 60%, var(--gold-dark));
+  border-color: #8a5a12;
+  box-shadow: 0 0 8px rgba(245, 196, 81, 0.55);
+}
+.bonus-count { font-size: 13px; color: var(--text-muted); }
+.bonus-timer.full { color: var(--gold); font-size: 14px; }
