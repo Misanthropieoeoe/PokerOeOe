@@ -107,6 +107,7 @@
         if (act === 'profile') this.openProfile();
         else if (act === 'signout') this.signOutFromBar(button);
         else if (act === 'retry') this.retryFromBar(button);
+        else if (act === 'bonus') this.app.bonus.open();
         else this.openAuth(act);
       });
 
@@ -276,6 +277,8 @@
           `<em class="player-title">${escapeHtml(Looks.titleName(p.title) || '')}</em>` +
           `<span>${fmt(p.chips)} jetons</span></span>` +
           '<span class="account-buttons">' +
+          `<button type="button" class="btn btn-ghost btn-small btn-bonus${Account.bonusReady ? ' ready' : ''}" data-act="bonus"` +
+          ` title="Bonus horaire">🎁${Account.bonusReady ? ' Bonus prêt !' : ' Bonus'}</button>` +
           '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
       } else if (Account.user) {

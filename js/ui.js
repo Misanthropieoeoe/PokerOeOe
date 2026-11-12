@@ -195,6 +195,7 @@
       this.rankedUi = new Poker.RankedUI(this);   // parties classées et classement (ranked.js)
       this.tablesUi = new Poker.PublicTablesUI(this); // liste des tables publiques (tables.js)
       this.shop = new Poker.ShopDialog(this);          // boutique de cadres (shop.js)
+      this.bonus = new Poker.BonusDialog(this);        // bonus horaire (bonus.js)
       this.rankedGame = null;                     // { matchId } pendant une partie classée
       this.applySettingsToForm();
       this.prefillFromHash();

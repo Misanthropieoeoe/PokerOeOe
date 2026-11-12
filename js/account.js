@@ -248,6 +248,25 @@
       return this.profile;
     }
 
+    /** Bonus horaire : secondes avant le prochain (0 = disponible), selon l'horloge du serveur. */
+    async bonusWait() {
+      return Number(await this.rpc('bonus_wait')) || 0;
+    }
+
+    /** Récupère les 250 jetons du bonus horaire. */
+    async claimBonus() {
+      this.profile = await this.rpc('claim_bonus');
+      this.emit('PROFILE');
+      return this.profile;
+    }
+
+    /** Bonus disponible ? (estimation locale pour le bouton ; le serveur fait foi) */
+    get bonusReady() {
+      if (!this.signedIn) return false;
+      const last = this.profile.last_bonus_at;
+      return !last || Date.now() - new Date(last).getTime() >= 3600 * 1000;
+    }
+
     /** Achète un cadre de la boutique (le prix est vérifié et débité par le serveur). */
     async buyFrame(frame) {
       this.profile = await this.rpc('buy_frame', { p_frame: frame });

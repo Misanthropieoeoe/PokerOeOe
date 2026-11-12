@@ -101,6 +101,9 @@ create table if not exists public.open_tables (
 alter table public.open_tables enable row level security;
 -- Aucune politique : lecture et écriture uniquement par les fonctions (le jeton n'est jamais lisible).
 
+-- Bonus horaire : date de la dernière récupération
+alter table public.profiles add column if not exists last_bonus_at timestamptz;
+
 -- Cadres achetés dans la boutique (le cadre « or » est gratuit pour tous)
 do $$
 begin
@@ -907,6 +910,44 @@ begin
 end;
 $$;
 
+-- Bonus horaire : 250 jetons, une fois par heure
+create or replace function public.bonus_wait()
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  -- Secondes avant le prochain bonus (0 = disponible), d'après l'horloge du serveur
+  select greatest(0, ceil(extract(epoch from (p.last_bonus_at + interval '1 hour') - now())))::integer
+  from public.profiles p where p.id = auth.uid();
+$$;
+
+create or replace function public.claim_bonus()
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid    uuid := auth.uid();
+  me     public.profiles;
+  result public.profiles;
+  wait   integer;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  select * into me from public.profiles where id = uid for update;
+  if not found then raise exception 'Profil introuvable.'; end if;
+  if me.last_bonus_at is not null and me.last_bonus_at > now() - interval '1 hour' then
+    wait := ceil(extract(epoch from (me.last_bonus_at + interval '1 hour') - now()) / 60);
+    raise exception 'Prochain bonus dans % min.', wait;
+  end if;
+  update public.profiles set chips = chips + 250, last_bonus_at = now()
+   where id = uid returning * into result;
+  return result;
+end;
+$$;
+
 -- Recharge gratuite : remet le solde à 1 000 jetons s'il est en dessous
 create or replace function public.refill_chips()
 returns public.profiles
@@ -974,6 +1015,8 @@ revoke all on function public.pseudo_available(text) from public;
 revoke all on function public.set_pseudo(text) from public;
 revoke all on function public.set_frame(text) from public;
 revoke all on function public.buy_frame(text) from public;
+revoke all on function public.claim_bonus() from public;
+revoke all on function public.bonus_wait() from public;
 revoke all on function public.set_avatar(text) from public;
 revoke all on function public.set_title(text) from public;
 revoke all on function public.grant_frame(text, text) from public, anon, authenticated;
@@ -999,6 +1042,8 @@ grant execute on function public.ensure_profile() to authenticated;
 grant execute on function public.set_pseudo(text) to authenticated;
 grant execute on function public.set_frame(text) to authenticated;
 grant execute on function public.buy_frame(text) to authenticated;
+grant execute on function public.claim_bonus() to authenticated;
+grant execute on function public.bonus_wait() to authenticated;
 grant execute on function public.set_avatar(text) to authenticated;
 grant execute on function public.set_title(text) to authenticated;
 grant execute on function public.start_game(integer, bigint) to authenticated;

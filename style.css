@@ -1478,3 +1478,52 @@ body.compact .avatar[data-frame="couronne"]::after { font-size: 11px; }
   .home-links .btn { font-size: 12px; padding: 10px 2px; }
 }
 #shop-error, #shop-success { margin: 0 0 10px; }
+
+/* ---------- Bonus horaire ---------- */
+
+.bonus-dialog { width: min(400px, calc(100vw - 32px)); }
+.bonus-body { display: grid; justify-items: center; gap: 10px; text-align: center; padding-bottom: 24px; }
+.bonus-body p { margin: 0; }
+.bonus-chips { position: relative; width: 120px; height: 84px; margin-top: 4px; }
+.bonus-chips span {
+  position: absolute;
+  left: 50%;
+  width: 70px;
+  height: 22px;
+  margin-left: -35px;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 0deg, #fff 0 12deg, var(--gold) 12deg 30deg);
+  box-shadow: 0 3px 0 #8a5a12, 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+.bonus-chips span::after {
+  content: "";
+  position: absolute;
+  inset: 4px 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe9a3, var(--gold));
+}
+.bonus-chips span:nth-child(1) { bottom: 0; }
+.bonus-chips span:nth-child(2) { bottom: 16px; }
+.bonus-chips span:nth-child(3) { bottom: 32px; }
+.bonus-dialog.claimed .bonus-chips span { animation: chip-drop 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) backwards; }
+.bonus-dialog.claimed .bonus-chips span:nth-child(2) { animation-delay: 0.12s; }
+.bonus-dialog.claimed .bonus-chips span:nth-child(3) { animation-delay: 0.24s; }
+@keyframes chip-drop { from { transform: translateY(-60px); opacity: 0; } }
+.bonus-amount { font-size: 18px; color: var(--text-muted); }
+.bonus-amount strong { font-size: 40px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.bonus-text { color: #cfdcd3; }
+.bonus-timer { font-weight: 800; font-size: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; min-height: 1.3em; }
+.bonus-timer.ready { color: #6fe3a1; }
+.bonus-body .btn-large { width: 100%; }
+
+/* Bouton de la barre de compte : brille quand le bonus est prêt */
+.btn-bonus.ready {
+  background: linear-gradient(180deg, #ffd66e, var(--gold-dark));
+  color: #2a1d00;
+  animation: bonus-glow 1.6s ease-in-out infinite;
+}
+@keyframes bonus-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 196, 81, 0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 196, 81, 0); }
+}
