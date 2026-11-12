@@ -1,6 +1,6 @@
-# Poker Texas Hold'em
+# Couronne Poker
 
-Texas Hold'em No Limit jouable dans le navigateur : en solo contre des bots, ou en ligne entre amis.
+Couronne Poker est un Texas Hold'em No Limit jouable dans le navigateur : en solo contre des bots, ou en ligne entre amis.
 Jetons fictifs uniquement (1 000 au départ), aucun argent réel.
 
 ## Jouer
@@ -79,7 +79,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 
 ## Mise à jour du site
 
-`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121543`).
+`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121546`).
 Après chaque modification, changez ce numéro (le même partout) : les navigateurs rechargent alors les
 nouveaux fichiers au lieu de garder les anciens en cache (GitHub Pages autorise jusqu'à 10 minutes de cache).
 
