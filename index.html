@@ -16,6 +16,8 @@
       <h1 id="home-title">Texas Hold'em</h1>
       <p class="home-subtitle">No Limit · contre des bots ou entre amis</p>
 
+      <div class="account-bar" id="account-bar" aria-live="polite"></div>
+
       <form id="home-form" autocomplete="off" novalidate>
         <div class="segmented mode-tabs" role="radiogroup" aria-label="Mode de jeu">
           <label><input type="radio" name="mode" value="solo" checked><span>Solo</span></label>
@@ -26,6 +28,7 @@
         <label class="field">
           <span class="field-label">Votre pseudo</span>
           <input id="input-name" type="text" maxlength="14" value="Joueur" required>
+          <span class="field-hint" id="name-hint"></span>
         </label>
 
         <fieldset class="field" data-modes="solo">
@@ -60,6 +63,101 @@
       </form>
 
       <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu. Le jeu en ligne nécessite une connexion Internet.</p>
+    </div>
+  </section>
+
+  <!-- ============ Connexion / inscription ============ -->
+  <section id="screen-auth" class="screen" aria-labelledby="auth-title">
+    <div class="home-card auth-card">
+      <h1 id="auth-title">Mon compte</h1>
+      <p class="home-subtitle" id="auth-subtitle">Un compte garde votre pseudo, vos statistiques et votre solde de jetons fictifs.</p>
+
+      <div class="segmented auth-tabs" id="auth-tabs" role="tablist">
+        <label><input type="radio" name="auth-tab" value="login" checked><span>Connexion</span></label>
+        <label><input type="radio" name="auth-tab" value="signup"><span>Inscription</span></label>
+      </div>
+
+      <!-- Connexion -->
+      <form class="auth-form" id="form-login" data-auth="login" novalidate>
+        <label class="field"><span class="field-label">Adresse e-mail</span>
+          <input id="login-email" type="email" autocomplete="email" required></label>
+        <label class="field"><span class="field-label">Mot de passe</span>
+          <input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="btn btn-primary btn-large">Se connecter</button>
+        <button type="button" class="link-button" id="btn-forgot">Mot de passe oublié ?</button>
+      </form>
+
+      <!-- Inscription -->
+      <form class="auth-form" id="form-signup" data-auth="signup" novalidate hidden>
+        <label class="field"><span class="field-label">Pseudo (réservé à votre compte)</span>
+          <input id="signup-pseudo" type="text" maxlength="14" autocomplete="nickname" required></label>
+        <label class="field"><span class="field-label">Adresse e-mail</span>
+          <input id="signup-email" type="email" autocomplete="email" required></label>
+        <label class="field"><span class="field-label">Mot de passe (6 caractères minimum)</span>
+          <input id="signup-password" type="password" autocomplete="new-password" minlength="6" required></label>
+        <button type="submit" class="btn btn-primary btn-large">Créer mon compte</button>
+      </form>
+
+      <!-- Mot de passe oublié -->
+      <form class="auth-form" id="form-forgot" data-auth="forgot" novalidate hidden>
+        <p class="field-hint">Entrez l’adresse de votre compte : vous recevrez un lien pour choisir un nouveau mot de passe.</p>
+        <label class="field"><span class="field-label">Adresse e-mail</span>
+          <input id="forgot-email" type="email" autocomplete="email" required></label>
+        <button type="submit" class="btn btn-primary btn-large">Envoyer le lien</button>
+        <button type="button" class="link-button" id="btn-back-login">Retour à la connexion</button>
+      </form>
+
+      <!-- Nouveau mot de passe (après le lien reçu par e-mail) -->
+      <form class="auth-form" id="form-newpass" data-auth="newpass" novalidate hidden>
+        <label class="field"><span class="field-label">Nouveau mot de passe</span>
+          <input id="newpass-password" type="password" autocomplete="new-password" minlength="6" required></label>
+        <button type="submit" class="btn btn-primary btn-large">Enregistrer le mot de passe</button>
+      </form>
+
+      <p class="form-error" id="auth-error" role="alert" hidden></p>
+      <p class="form-success" id="auth-success" role="status" hidden></p>
+
+      <button type="button" class="btn btn-ghost" id="btn-auth-guest">Continuer en invité</button>
+    </div>
+  </section>
+
+  <!-- ============ Mon profil ============ -->
+  <section id="screen-profile" class="screen" aria-labelledby="profile-title">
+    <div class="home-card profile-card">
+      <div class="profile-head">
+        <span class="avatar me profile-avatar" id="profile-avatar" aria-hidden="true">J</span>
+        <div class="profile-ident">
+          <h1 id="profile-title">Joueur</h1>
+          <p class="home-subtitle" id="profile-email"></p>
+        </div>
+      </div>
+
+      <div class="balance">
+        <span class="field-label">Solde</span>
+        <strong id="profile-chips">0</strong>
+        <span class="balance-unit">jetons fictifs</span>
+        <button type="button" class="btn btn-ghost btn-small" id="btn-refill" hidden>Recharger à 1 000</button>
+      </div>
+      <p class="field-hint" id="profile-refill-hint"></p>
+
+      <dl class="stats" id="profile-stats"></dl>
+
+      <form class="pseudo-form" id="form-pseudo" novalidate>
+        <label class="field"><span class="field-label">Changer de pseudo</span>
+          <span class="inline-field">
+            <input id="profile-pseudo" type="text" maxlength="14" required>
+            <button type="submit" class="btn btn-ghost">Enregistrer</button>
+          </span>
+        </label>
+      </form>
+
+      <p class="form-error" id="profile-error" role="alert" hidden></p>
+      <p class="form-success" id="profile-success" role="status" hidden></p>
+
+      <div class="end-actions">
+        <button type="button" class="btn btn-primary btn-large" id="btn-profile-back">Retour au jeu</button>
+        <button type="button" class="btn btn-ghost" id="btn-signout">Se déconnecter</button>
+      </div>
     </div>
   </section>
 
@@ -180,6 +278,7 @@
       <div class="end-icon" id="end-icon" aria-hidden="true">🏆</div>
       <h1 id="end-title">Partie terminée</h1>
       <p class="home-subtitle" id="end-subtitle"></p>
+      <p class="end-account" id="end-account" hidden></p>
       <ol class="ranking" id="end-ranking"></ol>
       <p class="lobby-wait" id="end-wait" hidden>L’hôte peut relancer une partie à la même table.</p>
       <div class="end-actions">
@@ -195,6 +294,9 @@
   <script src="js/bot.js"></script>
   <script src="js/session.js"></script>
   <script src="js/net.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/account.js"></script>
+  <script src="js/accountUi.js"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>

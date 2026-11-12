@@ -96,7 +96,14 @@
     constructor() {
       const byId = (id) => document.getElementById(id);
       this.el = {
-        screens: { home: byId('screen-home'), lobby: byId('screen-lobby'), game: byId('screen-game'), end: byId('screen-end') },
+        screens: {
+          home: byId('screen-home'),
+          auth: byId('screen-auth'),
+          profile: byId('screen-profile'),
+          lobby: byId('screen-lobby'),
+          game: byId('screen-game'),
+          end: byId('screen-end'),
+        },
         form: byId('home-form'),
         nameInput: byId('input-name'),
         codeInput: byId('input-code'),
@@ -179,6 +186,7 @@
       this.cardsLoggedHand = -1;
 
       this.bindEvents();
+      this.accountUi = new Poker.AccountUI(this); // comptes joueurs (accountUi.js)
       this.applySettingsToForm();
       this.prefillFromHash();
       // Rafraîchit les comptes à rebours affichés
@@ -219,10 +227,13 @@
       check('difficulty', this.settings.difficulty);
       check('mode', this.settings.mode);
       this.updateHomeForm();
+      if (this.accountUi) this.accountUi.applyToHome(); // connecté : pseudo du compte
     }
 
     /** Un lien d'invitation (…#CODE) ouvre directement l'onglet « Rejoindre ». */
     prefillFromHash() {
+      // Uniquement un code (pas les jetons de connexion ajoutés par les e-mails Supabase)
+      if (!/^#[A-Za-z0-9]{4,8}$/.test(root.location.hash)) return;
       const code = Net.normalizeCode(root.location.hash.slice(1));
       if (code.length >= 4) {
         this.el.codeInput.value = code;
@@ -269,17 +280,29 @@
     bindEvents() {
       const { el } = this;
 
-      el.form.addEventListener('change', () => {
-        this.setHomeError('');
+      // Le message d'erreur disparaît dès qu'on tape (et non à la sortie du champ :
+      // sinon le bouton remonte pendant le clic et le clic tombe à côté).
+      el.form.addEventListener('input', () => this.setHomeError(''));
+      el.form.addEventListener('change', (event) => {
+        if (event.target.type === 'radio') this.setHomeError('');
         this.updateHomeForm();
       });
-      el.form.addEventListener('submit', (event) => {
+      el.form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (this.homeBusy) return;
         const data = new FormData(el.form);
         const mode = this.homeMode;
+        const name = this.accountUi.effectiveName(cleanName(el.nameInput.value));
+        // Compte : solde suffisant ; invité : pseudo non réservé par un compte
+        this.setHomeBusy('Vérification…');
+        const problem = await this.accountUi.checkBeforePlay(name);
+        this.setHomeBusy(null);
+        if (problem) {
+          this.setHomeError(problem);
+          return;
+        }
         this.settings = {
-          name: cleanName(el.nameInput.value),
+          name,
           bots: Number(data.get('bots')) || 4,
           difficulty: data.get('difficulty') || 'moyen',
           mode,
@@ -344,9 +367,14 @@
       el.btnCopy.addEventListener('click', () => this.copyShareLink());
 
       // Fin de partie
-      el.btnReplay.addEventListener('click', () => {
-        if (this.mode === 'solo') this.startSolo();
-        else if (this.mode === 'host') this.backToLobby();
+      el.btnReplay.addEventListener('click', async () => {
+        if (this.mode === 'solo') {
+          const problem = await this.accountUi.checkBeforePlay(this.settings.name);
+          if (problem) this.leaveToHome(problem);
+          else this.startSolo();
+        } else if (this.mode === 'host') {
+          this.backToLobby();
+        }
       });
       el.btnSettings.addEventListener('click', () => this.leaveToHome());
 
@@ -416,6 +444,7 @@
     }
 
     teardown() {
+      if (this.accountUi) this.accountUi.abandon();
       if (this.runner) this.runner.stop();
       this.runner = null;
       if (this.net) {
@@ -462,6 +491,7 @@
       const { name, bots, difficulty } = this.settings;
       const players = [{ name, kind: 'local' }].concat(pickBotNames(bots, [name]).map((n) => ({ name: n, kind: 'bot' })));
       const game = new PokerGame({ players, startingChips: STARTING_CHIPS, handsPerLevel: HANDS_PER_LEVEL });
+      this.accountUi.beginGame(players.length); // mise prélevée si connecté
       this.startRunner(game, { difficulty, multiplayer: false });
     }
 
@@ -587,7 +617,7 @@
       let name = base;
       for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base.slice(0, 12)} ${i}`;
 
-      lobby.guests.push({ token, name, conn, connected: true, seat: null, lastSeen: Date.now() });
+      lobby.guests.push({ token, name, conn, connected: true, seat: null, lastSeen: Date.now(), account: !!message.account });
       lobby.bots = Math.min(lobby.bots, MAX_SEATS - 1 - lobby.guests.length);
       net.send(conn, { t: 'welcome', code: lobby.code, name });
       this.broadcastLobby();
@@ -619,7 +649,8 @@
       return {
         t: 'lobby',
         code: lobby.code,
-        players: [{ name: lobby.hostName, host: true }].concat(lobby.guests.map((g) => ({ name: g.name }))),
+        players: [{ name: lobby.hostName, host: true, account: Poker.Account.signedIn }]
+          .concat(lobby.guests.map((g) => ({ name: g.name, account: g.account }))),
         bots: lobby.bots,
         difficulty: lobby.difficulty,
       };
@@ -656,7 +687,8 @@
       lobby.started = true;
 
       const game = new PokerGame({ players, startingChips: STARTING_CHIPS, handsPerLevel: HANDS_PER_LEVEL });
-      guests.forEach((g) => this.net.send(g.conn, { t: 'start', code: lobby.code }));
+      guests.forEach((g) => this.net.send(g.conn, { t: 'start', code: lobby.code, players: players.length }));
+      this.accountUi.beginGame(players.length);
       this.startRunner(game, { difficulty: lobby.difficulty, multiplayer: true });
     }
 
@@ -718,7 +750,7 @@
           else this.leaveToHome('La connexion avec la table a été perdue.');
         }
       });
-      net.send({ t: 'join', name: this.settings.name, token: this.token });
+      net.send({ t: 'join', name: this.settings.name, token: this.token, account: Poker.Account.signedIn });
       // Sans réponse de l'hôte, on abandonne.
       setTimeout(() => {
         if (this.mode === 'client' && this.net === net && this.homeBusy) this.leaveToHome('La table ne répond pas.');
@@ -746,6 +778,7 @@
           break;
         case 'start':
           this.resetTableState();
+          this.accountUi.beginGame(Number(message.players) || 2);
           break;
         case 'logs':
           this.el.logList.innerHTML = '';
@@ -793,7 +826,7 @@
         const me = isHost ? p.host : p.name === this.myName;
         return `<li><span class="avatar${p.host ? ' host' : ''}">${escapeHtml(p.name.charAt(0).toUpperCase())}</span>` +
           `<span class="lobby-name">${escapeHtml(p.name)}${me ? ' (vous)' : ''}</span>` +
-          `<span class="tag">${p.host ? 'Hôte' : 'Joueur'}</span></li>`;
+          `<span class="tag">${p.host ? 'Hôte' : p.account ? 'Compte' : 'Invité'}</span></li>`;
       });
       for (let i = 0; i < payload.bots; i++) {
         items.push('<li class="bot"><span class="avatar bot">🤖</span><span class="lobby-name">Bot</span>' +
@@ -855,6 +888,7 @@
         this.cardsLoggedHand = view.handNumber;
         this.appendLog({ text: `Vos cartes : ${me.hand.map(cardLabel).join(' ')}`, kind: 'private' });
       }
+      this.accountUi.trackView(view); // statistiques et fin de partie du compte
       this.render();
     }
 
@@ -1303,6 +1337,7 @@
       el.btnReplay.hidden = this.mode === 'client';
       el.btnReplay.textContent = this.mode === 'host' ? 'Nouvelle partie à cette table' : 'Rejouer';
       el.btnSettings.textContent = this.mode === 'solo' ? 'Changer les réglages' : this.mode === 'host' ? 'Fermer la table' : 'Quitter la table';
+      this.accountUi.renderEndLine();
       this.showScreen('end');
     }
   }
