@@ -19,8 +19,11 @@ Sur l'accueil, on peut jouer **en invité** (rien n'est enregistré) ou **se con
 et un mot de passe. Un compte apporte :
 
 - un **pseudo réservé** (un invité ne peut pas le prendre) ;
-- une **apparence personnalisée** : photo de profil (recadrée et allégée automatiquement) et cadre de couleur
-  (Or, Argent, Rubis, Émeraude, Saphir, Améthyste, Néon, Arc-en-ciel), visibles aussi par les autres joueurs en ligne ;
+- une **apparence personnalisée** : photo de profil (on choisit soi-même la partie visible : glisser, zoomer
+  ou pincer) et cadre de couleur (Or, Argent, Rubis, Émeraude, Saphir, Améthyste, Néon, Arc-en-ciel) ;
+- des **titres** affichés sous le pseudo, débloqués avec les statistiques (Habitué, Vainqueur, Requin, Légende,
+  Flambeur, Phénix, Magnat…) ;
+- apparence et titre sont visibles par les autres joueurs en ligne ;
 - des **statistiques** : parties jouées, victoires, meilleure place, mains gagnées, plus gros pot ;
 - un **solde de jetons fictifs** : chaque partie coûte une mise de 1 000 jetons, on récupère ses jetons
   restants à la fin (quitter en cours de partie fait perdre la mise). Recharge gratuite à 1 000 jetons
@@ -74,7 +77,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 | `js/config.js` | Adresse et clé publique du projet Supabase |
 | `js/account.js` | Comptes : inscription, connexion, profil, mise et fin de partie (Supabase) |
 | `js/accountUi.js` | Écrans « Mon compte » et « Mon profil », barre de compte |
-| `js/looks.js` | Apparence : cadres, photos de profil (recadrage, vérification) |
+| `js/looks.js` | Apparence : cadres, titres, photos de profil (recadrage interactif, vérification) |
 | `supabase/schema.sql` | Base de données des comptes : tables, règles d'accès, fonctions |
 | `style.css` | Table, cartes en CSS, mise en page responsive |
 

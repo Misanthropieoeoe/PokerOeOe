@@ -830,8 +830,10 @@
       el.lobbyCount.textContent = `${total} / ${MAX_SEATS}`;
       const items = payload.players.map((p) => {
         const me = isHost ? p.host : p.name === this.myName;
+        const title = Looks.titleName(Looks.sanitize(p.look).title);
         return `<li>${Looks.avatarHtml({ name: p.name, look: p.look, variant: p.host ? 'host' : 'person' })}` +
-          `<span class="lobby-name">${escapeHtml(p.name)}${me ? ' (vous)' : ''}</span>` +
+          `<span class="lobby-name">${escapeHtml(p.name)}${me ? ' (vous)' : ''}` +
+          `${title ? `<em class="player-title">${escapeHtml(title)}</em>` : ''}</span>` +
           `<span class="tag">${p.host ? 'Hôte' : p.account ? 'Compte' : 'Invité'}</span></li>`;
       });
       for (let i = 0; i < payload.bots; i++) {
@@ -1041,12 +1043,14 @@
         seat.style.left = `${50 + 50 * cos}%`;
         seat.style.top = `${50 + 50 * sin}%`;
         const avatarClass = isMe ? 'me' : player.isHuman ? 'person' : 'bot';
+        const seatTitle = Looks.titleName(Looks.sanitize(player.look).title);
         seat.innerHTML = `
           <div class="seat-cards"></div>
           <div class="seat-box">
             ${Looks.avatarHtml({ name: player.name, look: player.look, variant: avatarClass })}
             <div class="seat-text">
               <div class="seat-name">${escapeHtml(player.name)}</div>
+              ${seatTitle ? `<div class="seat-title">${escapeHtml(seatTitle)}</div>` : ''}
               <div class="seat-chips"></div>
             </div>
             <div class="seat-badges"></div>

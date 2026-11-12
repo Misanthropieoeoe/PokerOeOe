@@ -239,7 +239,13 @@
     /** Apparence du joueur connecté (cadre + photo), envoyée aussi aux autres joueurs en ligne. */
     get look() {
       if (!this.signedIn) return null;
-      return { avatar: this.avatarUrl, frame: this.profile.frame || 'or' };
+      return { avatar: this.avatarUrl, frame: this.profile.frame || 'or', title: this.profile.title || 'debutant' };
+    }
+
+    async setTitle(title) {
+      this.profile = await this.rpc('set_title', { p_title: title });
+      this.emit('PROFILE');
+      return this.profile;
     }
 
     async setFrame(frame) {
@@ -249,7 +255,7 @@
     }
 
     /**
-     * Envoie une nouvelle photo (déjà recadrée par Poker.Looks.prepareAvatar) puis l'enregistre.
+     * Envoie une nouvelle photo (déjà recadrée par Poker.Looks.exportAvatar) puis l'enregistre.
      * Chaque envoi a un nom unique (pas de souci de cache) ; l'ancienne photo est supprimée ensuite.
      */
     async uploadAvatar({ blob, ext, type }) {

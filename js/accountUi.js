@@ -59,6 +59,9 @@
         avatarFileLabel: byId('label-avatar-file'),
         btnAvatarRemove: byId('btn-avatar-remove'),
         frameGrid: byId('frame-grid'),
+        titleGrid: byId('title-grid'),
+        titleCount: byId('title-count'),
+        profilePlayerTitle: byId('profile-player-title'),
         profileTitle: byId('profile-title'),
         profileEmail: byId('profile-email'),
         profileChips: byId('profile-chips'),
@@ -71,6 +74,14 @@
         endAccount: byId('end-account'),
       };
       this.current = null; // partie en cours enregistrée sur le compte
+      this.cropper = new Looks.Cropper({
+        dialog: byId('crop-dialog'),
+        stage: byId('crop-stage'),
+        canvas: byId('crop-canvas'),
+        zoom: byId('crop-zoom'),
+        ok: byId('crop-ok'),
+        cancel: byId('crop-cancel'),
+      });
       this.bindEvents();
       Account.onChange((event) => this.onAccountChange(event));
       this.refresh();
@@ -180,11 +191,13 @@
         const file = el.avatarFile.files && el.avatarFile.files[0];
         el.avatarFile.value = ''; // permet de rechoisir le même fichier
         if (!file) return;
-        this.setPhotoBusy(true);
         this.runProfile(async () => {
+          const img = await Looks.readImageFile(file);
+          const crop = await this.cropper.open(img); // le joueur choisit la partie visible
+          if (!crop) return null; // annulé
+          this.setPhotoBusy(true);
           try {
-            const prepared = await Looks.prepareAvatar(file);
-            await Account.uploadAvatar(prepared);
+            await Account.uploadAvatar(await Looks.exportAvatar(img, crop));
             return 'Photo de profil mise à jour.';
           } finally {
             this.setPhotoBusy(false);
@@ -195,6 +208,14 @@
         this.runProfile(async () => {
           await Account.removeAvatar();
           return 'Photo retirée.';
+        });
+      });
+      el.titleGrid.addEventListener('change', (event) => {
+        const title = event.target.value;
+        if (!title || !Account.profile || title === Account.profile.title) return;
+        this.runProfile(async () => {
+          await Account.setTitle(title);
+          return `Titre « ${Looks.titleName(title)} » affiché sous votre pseudo.`;
         });
       });
       el.frameGrid.addEventListener('change', (event) => {
@@ -241,7 +262,9 @@
         const p = Account.profile;
         bar.innerHTML =
           Looks.avatarHtml({ name: p.pseudo, look: Account.look, variant: 'me' }) +
-          `<span class="account-status"><strong>${escapeHtml(p.pseudo)}</strong><span>${fmt(p.chips)} jetons</span></span>` +
+          `<span class="account-status"><strong>${escapeHtml(p.pseudo)}</strong>` +
+          `<em class="player-title">${escapeHtml(Looks.titleName(p.title) || '')}</em>` +
+          `<span>${fmt(p.chips)} jetons</span></span>` +
           '<span class="account-buttons">' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
@@ -409,6 +432,21 @@
           `<span>${frame.name}</span></label>`;
       }).join('');
       el.profileTitle.textContent = p.pseudo;
+      el.profilePlayerTitle.textContent = Looks.titleName(p.title) || '';
+      // Titres : débloqués (choisissables) ou verrouillés (avec la progression)
+      const unlocked = Looks.TITLES.filter((t) => Looks.titleUnlocked(p, t)).length;
+      el.titleCount.textContent = `${unlocked} / ${Looks.TITLES.length} débloqués`;
+      el.titleGrid.innerHTML = Looks.TITLES.map((title) => {
+        const isUnlocked = Looks.titleUnlocked(p, title);
+        const checked = (p.title || 'debutant') === title.id ? ' checked' : '';
+        const progress = !isUnlocked && title.stat
+          ? ` · ${fmt(Math.min(Number(p[title.stat] || 0), title.need))} / ${fmt(title.need)}`
+          : '';
+        return `<label class="title-option${isUnlocked ? '' : ' locked'}">` +
+          `<input type="radio" name="player-title" value="${title.id}"${checked}${isUnlocked ? '' : ' disabled'}>` +
+          `<span class="title-name">${isUnlocked ? '' : '🔒 '}${title.name}</span>` +
+          `<span class="title-goal">${title.goal}${progress}</span></label>`;
+      }).join('');
       el.profileEmail.textContent = Account.user ? Account.user.email : '';
       el.profileChips.textContent = fmt(p.chips);
       if (document.activeElement !== el.pseudoInput) el.pseudoInput.value = p.pseudo;

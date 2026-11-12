@@ -128,6 +128,7 @@
         <span class="profile-avatar-slot" id="profile-avatar"></span>
         <div class="profile-ident">
           <h1 id="profile-title">Joueur</h1>
+          <p class="player-title" id="profile-player-title"></p>
           <p class="home-subtitle" id="profile-email"></p>
         </div>
       </div>
@@ -144,6 +145,10 @@
         <fieldset class="frame-picker">
           <legend class="field-label">Cadre</legend>
           <div class="frame-grid" id="frame-grid"></div>
+        </fieldset>
+        <fieldset class="title-picker">
+          <legend class="field-label">Titre <span class="legend-note" id="title-count"></span></legend>
+          <div class="title-grid" id="title-grid"></div>
         </fieldset>
       </section>
 
@@ -175,6 +180,26 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ Recadrage de la photo ============ -->
+  <div class="crop-dialog" id="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="crop-title" hidden>
+    <div class="home-card crop-card">
+      <h2 id="crop-title">Recadrer la photo</h2>
+      <p class="field-hint">Faites glisser la photo et zoomez : le cercle montre ce qui sera visible.</p>
+      <div class="crop-stage" id="crop-stage" tabindex="0" aria-label="Zone de recadrage : flèches pour déplacer, + et − pour zoomer">
+        <canvas id="crop-canvas" width="512" height="512"></canvas>
+        <div class="crop-mask" aria-hidden="true"></div>
+      </div>
+      <label class="field crop-zoom">
+        <span class="field-label">Zoom</span>
+        <input type="range" id="crop-zoom" min="1" max="4" step="0.01" value="1">
+      </label>
+      <div class="crop-actions">
+        <button type="button" class="btn btn-ghost" id="crop-cancel">Annuler</button>
+        <button type="button" class="btn btn-primary" id="crop-ok">Valider</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ Salle d'attente (multijoueur) ============ -->
   <section id="screen-lobby" class="screen" aria-labelledby="lobby-code">

@@ -54,6 +54,18 @@ begin
 end;
 $$;
 
+-- Titre affiché sous le pseudo (débloqué grâce aux statistiques)
+alter table public.profiles add column if not exists title text not null default 'debutant';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'profiles_title_check') then
+    alter table public.profiles add constraint profiles_title_check
+      check (title in ('debutant', 'habitue', 'veteran', 'vainqueur', 'requin', 'legende',
+                       'main_heureuse', 'gros_pot', 'flambeur', 'phenix', 'riche', 'magnat'));
+  end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Sécurité au niveau des lignes : lecture de ses propres données uniquement
 -- ---------------------------------------------------------------------------
@@ -205,6 +217,52 @@ begin
     raise exception 'Cadre inconnu.';
   end if;
   update public.profiles set frame = p_frame where id = uid returning * into result;
+  return result;
+end;
+$$;
+
+-- Conditions de déblocage des titres (mêmes règles que js/looks.js)
+create or replace function public.title_unlocked(p public.profiles, p_title text)
+returns boolean
+language sql
+immutable
+as $$
+  select case p_title
+    when 'debutant'      then true
+    when 'habitue'       then p.games_played >= 10
+    when 'veteran'       then p.games_played >= 50
+    when 'vainqueur'     then p.wins >= 1
+    when 'requin'        then p.wins >= 10
+    when 'legende'       then p.wins >= 50
+    when 'main_heureuse' then p.hands_won >= 100
+    when 'gros_pot'      then p.biggest_pot >= 3000
+    when 'flambeur'      then p.biggest_pot >= 5000
+    when 'phenix'        then p.refills >= 5
+    when 'riche'         then p.chips >= 10000
+    when 'magnat'        then p.chips >= 50000
+    else false
+  end;
+$$;
+
+-- Porter un titre (uniquement s'il est débloqué)
+create or replace function public.set_title(p_title text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid    uuid := auth.uid();
+  me     public.profiles;
+  result public.profiles;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  select * into me from public.profiles where id = uid;
+  if not found then raise exception 'Profil introuvable.'; end if;
+  if p_title is null or not public.title_unlocked(me, p_title) then
+    raise exception 'Ce titre n''est pas encore débloqué.';
+  end if;
+  update public.profiles set title = p_title where id = uid returning * into result;
   return result;
 end;
 $$;
@@ -379,6 +437,7 @@ revoke all on function public.pseudo_available(text) from public;
 revoke all on function public.set_pseudo(text) from public;
 revoke all on function public.set_frame(text) from public;
 revoke all on function public.set_avatar(text) from public;
+revoke all on function public.set_title(text) from public;
 revoke all on function public.start_game(integer) from public;
 revoke all on function public.finish_game(bigint, bigint, integer, integer, bigint) from public;
 revoke all on function public.refill_chips() from public;
@@ -388,6 +447,7 @@ grant execute on function public.ensure_profile() to authenticated;
 grant execute on function public.set_pseudo(text) to authenticated;
 grant execute on function public.set_frame(text) to authenticated;
 grant execute on function public.set_avatar(text) to authenticated;
+grant execute on function public.set_title(text) to authenticated;
 grant execute on function public.start_game(integer) to authenticated;
 grant execute on function public.finish_game(bigint, bigint, integer, integer, bigint) to authenticated;
 grant execute on function public.refill_chips() to authenticated;
