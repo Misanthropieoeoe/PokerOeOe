@@ -6,9 +6,10 @@ Jetons fictifs uniquement (1 000 au départ), aucun argent réel.
 ## Jouer
 
 - **Solo** : ouvrez `index.html` (un double-clic suffit), choisissez 3 à 5 bots et une difficulté. Fonctionne hors ligne.
-- **En ligne** : un joueur choisit « Créer une table » et reçoit un code (ex. `K7PQ2`) et un lien d'invitation.
-  Les autres choisissent « Rejoindre » et entrent le code (ou ouvrent le lien). L'hôte ajoute des bots s'il manque du monde
-  (2 à 6 joueurs) puis lance la partie.
+- **En ligne** : un joueur choisit « Créer », puis une table **privée** (on rejoint avec son code, ex. `K7PQ2`,
+  ou le lien d'invitation) ou **publique** (elle apparaît en plus dans la liste « Tables publiques » de l'onglet
+  « Rejoindre », tant qu'il reste de la place et que la partie n'a pas commencé). L'hôte ajoute des bots s'il
+  manque du monde (2 à 6 joueurs) puis lance la partie. La liste des tables publiques nécessite Supabase.
 
 Le mode en ligne est le plus simple à utiliser depuis la version publiée avec GitHub Pages
 (Settings → Pages → branche `main`) : le lien d'invitation est alors directement partageable.
@@ -97,6 +98,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 | `js/config.js` | Adresse et clé publique du projet Supabase |
 | `js/account.js` | Comptes : inscription, connexion, profil, mise et fin de partie (Supabase) |
 | `js/accountUi.js` | Écrans « Mon compte » et « Mon profil », barre de compte |
+| `js/tables.js` | Liste des tables publiques (onglet « Rejoindre ») |
 | `js/ranked.js` | Parties classées (file d'attente, formation des tables) et classement |
 | `js/looks.js` | Apparence : cadres, titres, photos de profil (recadrage interactif, vérification) |
 | `supabase/schema.sql` | Base de données des comptes : tables, règles d'accès, fonctions |

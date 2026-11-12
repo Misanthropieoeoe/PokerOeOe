@@ -84,6 +84,23 @@ alter table public.matches enable row level security;
 alter table public.match_players enable row level security;
 -- Aucune politique : ces tables ne sont lues et écrites que par les fonctions ci-dessous.
 
+-- Annuaire des tables publiques (multijoueur) : l'hôte inscrit sa table et la tient à jour.
+-- Une table sans nouvelles depuis 30 s n'apparaît plus. Accessible aussi aux invités (sans compte) :
+-- chaque inscription reçoit un jeton secret, seul moyen de la modifier ou de la retirer.
+create table if not exists public.open_tables (
+  code        text primary key check (code ~ '^[A-Z0-9]{4,8}$'),
+  host_pseudo text not null,
+  host_user   uuid references auth.users (id) on delete cascade,  -- null pour un hôte invité
+  players     integer not null default 1 check (players between 1 and 6),
+  bots        integer not null default 0 check (bots between 0 and 5),
+  difficulty  text not null default 'moyen' check (difficulty in ('facile', 'moyen', 'difficile')),
+  token       uuid not null default gen_random_uuid(),
+  created_at  timestamptz not null default now(),
+  last_seen   timestamptz not null default now()
+);
+alter table public.open_tables enable row level security;
+-- Aucune politique : lecture et écriture uniquement par les fonctions (le jeton n'est jamais lisible).
+
 -- Cadres exclusifs attribués à un compte précis (voir grant_frame plus bas)
 alter table public.profiles add column if not exists exclusive_frames text[] not null default '{}';
 
@@ -441,6 +458,106 @@ set search_path = public
 as $$
   update public.matches set status = 'cancelled'
    where id = p_match and host_id = auth.uid() and status = 'forming';
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Tables publiques : inscription, mise à jour, retrait, liste
+-- ---------------------------------------------------------------------------
+
+-- Inscrit une table publique ; renvoie le jeton secret de l'hôte
+create or replace function public.open_table(p_code text, p_pseudo text, p_players integer, p_bots integer, p_difficulty text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid     uuid := auth.uid();
+  pseudo  text := btrim(regexp_replace(coalesce(p_pseudo, ''), '\s+', ' ', 'g'));
+  result  uuid;
+begin
+  if p_code is null or p_code !~ '^[A-Z0-9]{4,8}$' then raise exception 'Code de table invalide.'; end if;
+  if uid is not null then
+    select p.pseudo into pseudo from public.profiles p where p.id = uid; -- pseudo du compte
+  end if;
+  if char_length(coalesce(pseudo, '')) not between 2 and 14 then raise exception 'Pseudo invalide.'; end if;
+  if p_players is null or p_players not between 1 and 6 or p_bots is null or p_bots not between 0 and 5
+     or p_players + p_bots > 6 then
+    raise exception 'Nombre de joueurs invalide.';
+  end if;
+  if p_difficulty not in ('facile', 'moyen', 'difficile') then raise exception 'Difficulté invalide.'; end if;
+
+  delete from public.open_tables where last_seen < now() - interval '30 seconds';
+  if (select count(*) from public.open_tables) >= 300 then
+    raise exception 'Trop de tables publiques ouvertes pour le moment. Réessayez plus tard.';
+  end if;
+  if exists (select 1 from public.open_tables where code = p_code) then
+    raise exception 'Ce code de table est déjà utilisé.';
+  end if;
+  insert into public.open_tables (code, host_pseudo, host_user, players, bots, difficulty)
+  values (p_code, pseudo, uid, p_players, p_bots, p_difficulty)
+  returning token into result;
+  return result;
+end;
+$$;
+
+-- Mise à jour régulière par l'hôte (sert aussi de signe de vie)
+create or replace function public.update_table(p_code text, p_token uuid, p_players integer, p_bots integer, p_difficulty text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_players is null or p_players not between 1 and 6 or p_bots is null or p_bots not between 0 and 5
+     or p_players + p_bots > 6 or p_difficulty not in ('facile', 'moyen', 'difficile') then
+    raise exception 'Valeurs invalides.';
+  end if;
+  update public.open_tables
+     set players = p_players, bots = p_bots, difficulty = p_difficulty, last_seen = now()
+   where code = p_code and token = p_token;
+  if not found then raise exception 'Table publique introuvable.'; end if;
+end;
+$$;
+
+-- Retire la table de la liste (partie lancée ou table fermée)
+create or replace function public.close_table(p_code text, p_token uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.open_tables where code = p_code and token = p_token;
+$$;
+
+-- Tables publiques qui ont encore de la place
+create or replace function public.list_tables()
+returns table (
+  code        text,
+  host_pseudo text,
+  players     integer,
+  bots        integer,
+  difficulty  text,
+  free_seats  integer,
+  has_account boolean,
+  frame       text,
+  title       text,
+  avatar_path text,
+  created_at  timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select t.code, t.host_pseudo, t.players, t.bots, t.difficulty, 6 - t.players - t.bots,
+         t.host_user is not null, p.frame, p.title, p.avatar_path, t.created_at
+  from public.open_tables t
+  left join public.profiles p on p.id = t.host_user
+  where t.last_seen > now() - interval '30 seconds'
+    and t.players + t.bots < 6
+  order by t.created_at desc
+  limit 50;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -803,6 +920,10 @@ revoke all on function public.poll_queue() from public;
 revoke all on function public.set_match_code(bigint, text) from public;
 revoke all on function public.cancel_match(bigint) from public;
 revoke all on function public.leaderboard(text, integer) from public;
+revoke all on function public.open_table(text, text, integer, integer, text) from public;
+revoke all on function public.update_table(text, uuid, integer, integer, text) from public;
+revoke all on function public.close_table(text, uuid) from public;
+revoke all on function public.list_tables() from public;
 revoke all on function public.finish_game(bigint, bigint, integer, integer, bigint) from public;
 revoke all on function public.refill_chips() from public;
 
@@ -819,5 +940,9 @@ grant execute on function public.poll_queue() to authenticated;
 grant execute on function public.set_match_code(bigint, text) to authenticated;
 grant execute on function public.cancel_match(bigint) to authenticated;
 grant execute on function public.leaderboard(text, integer) to anon, authenticated;
+grant execute on function public.open_table(text, text, integer, integer, text) to anon, authenticated;
+grant execute on function public.update_table(text, uuid, integer, integer, text) to anon, authenticated;
+grant execute on function public.close_table(text, uuid) to anon, authenticated;
+grant execute on function public.list_tables() to anon, authenticated;
 grant execute on function public.finish_game(bigint, bigint, integer, integer, bigint) to authenticated;
 grant execute on function public.refill_chips() to authenticated;

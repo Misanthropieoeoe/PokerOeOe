@@ -51,8 +51,25 @@
           <p class="field-hint" id="difficulty-hint"></p>
         </fieldset>
 
+        <fieldset class="field" data-modes="create">
+          <legend class="field-label">Visibilité de la table</legend>
+          <div class="segmented">
+            <label><input type="radio" name="visibility" value="private" checked><span>🔒 Privée</span></label>
+            <label><input type="radio" name="visibility" value="public"><span>🌍 Publique</span></label>
+          </div>
+          <p class="field-hint" id="visibility-hint"></p>
+        </fieldset>
+
+        <section class="public-tables" data-modes="join" aria-labelledby="pt-title">
+          <div class="pt-head">
+            <h2 class="field-label" id="pt-title">Tables publiques</h2>
+            <button type="button" class="link-button" id="btn-pt-refresh">Actualiser</button>
+          </div>
+          <ul class="pt-list" id="pt-list" aria-live="polite"></ul>
+        </section>
+
         <label class="field" data-modes="join">
-          <span class="field-label">Code de la table</span>
+          <span class="field-label">Ou le code d’une table privée</span>
           <input id="input-code" type="text" maxlength="8" placeholder="Ex. K7PQ2" autocapitalize="characters" spellcheck="false">
         </label>
 
@@ -244,7 +261,7 @@
   <!-- ============ Salle d'attente (multijoueur) ============ -->
   <section id="screen-lobby" class="screen" aria-labelledby="lobby-code">
     <div class="home-card lobby-card">
-      <p class="eyebrow">Table en ligne · code</p>
+      <p class="eyebrow" id="lobby-eyebrow">Table en ligne · code</p>
       <h1 class="lobby-code" id="lobby-code">-----</h1>
       <p class="home-subtitle" id="lobby-subtitle"></p>
 
@@ -380,6 +397,7 @@
   <script src="js/account.js"></script>
   <script src="js/accountUi.js"></script>
   <script src="js/ranked.js"></script>
+  <script src="js/tables.js"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>

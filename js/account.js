@@ -342,6 +342,27 @@
     setMatchCode(matchId, code) { return this.rpc('set_match_code', { p_match: matchId, p_code: code }); }
     cancelMatch(matchId) { return this.rpc('cancel_match', { p_match: matchId }); }
 
+    /* Annuaire des tables publiques (utilisable aussi sans compte) */
+
+    /** Inscrit une table publique. @returns {Promise<string>} jeton secret de l'hôte */
+    async openTable({ code, pseudo, players, bots, difficulty }) {
+      await this.ready;
+      return this.rpc('open_table', { p_code: code, p_pseudo: pseudo, p_players: players, p_bots: bots, p_difficulty: difficulty });
+    }
+
+    updateTable({ code, token, players, bots, difficulty }) {
+      return this.rpc('update_table', { p_code: code, p_token: token, p_players: players, p_bots: bots, p_difficulty: difficulty });
+    }
+
+    closeTable(code, token) {
+      return this.rpc('close_table', { p_code: code, p_token: token });
+    }
+
+    async listTables() {
+      await this.ready;
+      return (await this.rpc('list_tables')) || [];
+    }
+
     /** Classement public : 'cote', 'jetons' ou 'victoires'. */
     async leaderboard(sort) {
       return (await this.rpc('leaderboard', { p_sort: sort, p_limit: 50 })) || [];

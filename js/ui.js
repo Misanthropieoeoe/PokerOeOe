@@ -115,6 +115,7 @@
         btnStart: byId('btn-start'),
         lobbyCode: byId('lobby-code'),
         lobbySubtitle: byId('lobby-subtitle'),
+        lobbyEyebrow: byId('lobby-eyebrow'),
         shareRow: byId('share-row'),
         shareLink: byId('share-link'),
         btnCopy: byId('btn-copy'),
@@ -192,6 +193,7 @@
       this.bindEvents();
       this.accountUi = new Poker.AccountUI(this); // comptes joueurs (accountUi.js)
       this.rankedUi = new Poker.RankedUI(this);   // parties classées et classement (ranked.js)
+      this.tablesUi = new Poker.PublicTablesUI(this); // liste des tables publiques (tables.js)
       this.rankedGame = null;                     // { matchId } pendant une partie classée
       this.applySettingsToForm();
       this.prefillFromHash();
@@ -209,7 +211,7 @@
     /* ---------------------------------------------------------------- */
 
     loadSettings() {
-      const defaults = { name: 'Joueur', bots: 4, difficulty: 'moyen', mode: 'solo', code: '' };
+      const defaults = { name: 'Joueur', bots: 4, difficulty: 'moyen', mode: 'solo', code: '', visibility: 'private' };
       try {
         return Object.assign(defaults, JSON.parse(storageGet(SETTINGS_KEY) || 'null') || {});
       } catch (e) {
@@ -232,6 +234,7 @@
       check('bots', this.settings.bots);
       check('difficulty', this.settings.difficulty);
       check('mode', this.settings.mode);
+      check('visibility', this.settings.visibility || 'private');
       this.updateHomeForm();
       if (this.accountUi) this.accountUi.applyToHome(); // connecté : pseudo du compte
     }
@@ -322,6 +325,7 @@
           difficulty: data.get('difficulty') || 'moyen',
           mode,
           code: Net.normalizeCode(el.codeInput.value),
+          visibility: data.get('visibility') === 'public' ? 'public' : 'private',
         };
         this.saveSettings();
         this.setHomeError('');
@@ -468,6 +472,7 @@
     teardown() {
       if (this.accountUi && !this.reconnecting) this.accountUi.abandon();
       if (this.lobby && this.lobby.rankedTimer) clearInterval(this.lobby.rankedTimer);
+      this.unlistTable();
       if (!this.reconnecting) this.rankedGame = null;
       if (this.runner) this.runner.stop();
       this.runner = null;
@@ -594,6 +599,8 @@
         guests: [],      // { token, name, conn, connected, seat }
         started: false,
         ranked: null,
+        visibility: options.ranked ? 'private' : (this.settings.visibility || 'private'),
+        listing: null,   // { token } quand la table est inscrite dans la liste publique
       };
       if (options.ranked) {
         // Partie classée : seuls les joueurs choisis par le matchmaking, sans bots ; démarrage automatique
@@ -611,7 +618,74 @@
       net.on('error', (message) => this.showNetworkWarning(message));
       this.broadcastLobby();
       this.showScreen('lobby');
+      if (this.lobby.visibility === 'public') this.publishTable();
       return net.code;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Table publique : inscription dans la liste « Rejoindre »          */
+    /* ---------------------------------------------------------------- */
+
+    listingInfo() {
+      const { lobby } = this;
+      return {
+        code: lobby.code,
+        pseudo: lobby.hostName,
+        players: 1 + lobby.guests.filter((g) => g.connected).length,
+        bots: lobby.bots,
+        difficulty: lobby.difficulty,
+      };
+    }
+
+    async publishTable() {
+      const lobby = this.lobby;
+      if (!lobby || lobby.listing || lobby.started) return;
+      lobby.listingError = '';
+      try {
+        const token = await Poker.Account.openTable(this.listingInfo());
+        if (this.lobby !== lobby || lobby.started) {
+          Poker.Account.closeTable(lobby.code, token).catch(() => {}); // table fermée entre-temps
+          return;
+        }
+        lobby.listing = { token };
+        // Signe de vie toutes les 10 s : sans nouvelles depuis 30 s, la table disparaît de la liste
+        lobby.listingTimer = setInterval(() => this.refreshListing(), 10000);
+      } catch (error) {
+        lobby.listingError = `Table non publiée : ${error.message} Partagez plutôt le code.`;
+      }
+      if (this.lobby === lobby && !lobby.started) this.renderLobby(this.lobbyPayload());
+    }
+
+    /** Met à jour la liste (joueurs, bots, difficulté) ; republie si l'inscription a expiré. */
+    refreshListing() {
+      const lobby = this.lobby;
+      if (!lobby || !lobby.listing || lobby.started) return;
+      Poker.Account.updateTable(Object.assign({ token: lobby.listing.token }, this.listingInfo())).catch(() => {
+        // Expirée (onglet en veille par exemple) : nouvelle inscription
+        if (this.lobby !== lobby) return;
+        clearInterval(lobby.listingTimer);
+        lobby.listing = null;
+        this.publishTable();
+      });
+    }
+
+    /** Retire la table de la liste (partie lancée, table fermée). */
+    unlistTable() {
+      const lobby = this.lobby;
+      if (!lobby) return;
+      if (lobby.listingTimer) clearInterval(lobby.listingTimer);
+      lobby.listingTimer = null;
+      if (lobby.listing) Poker.Account.closeTable(lobby.code, lobby.listing.token).catch(() => {});
+      lobby.listing = null;
+    }
+
+    /** Clic sur « Rejoindre » dans la liste des tables publiques. */
+    joinFromList(code) {
+      const { form, codeInput } = this.el;
+      codeInput.value = code;
+      form.querySelector('input[name="mode"][value="join"]').checked = true;
+      this.updateHomeForm();
+      form.requestSubmit(); // mêmes vérifications qu'un code saisi (pseudo, etc.)
     }
 
     /** Partie classée : démarre dès que tout le monde est là, ou à la fin du délai. */
@@ -727,6 +801,8 @@
           .concat(lobby.guests.map((g) => ({ name: g.name, account: g.account, look: g.look }))),
         bots: lobby.bots,
         difficulty: lobby.difficulty,
+        visibility: lobby.visibility,
+        listed: !!lobby.listing,
         ranked: lobby.ranked
           ? { players: lobby.ranked.expected.size + 1, secondsLeft: Math.max(0, Math.ceil((lobby.ranked.deadline - Date.now()) / 1000)) }
           : null,
@@ -737,6 +813,7 @@
       const payload = this.lobbyPayload();
       this.lobby.guests.forEach((g) => g.connected && this.net.send(g.conn, payload));
       this.renderLobby(payload);
+      if (!this.lobby.ranked) this.refreshListing(); // joueurs, bots ou difficulté changés
     }
 
     sendToSeat(seatId, message) {
@@ -763,6 +840,7 @@
       lobby.guests = guests;
       lobby.started = true;
       if (lobby.rankedTimer) clearInterval(lobby.rankedTimer);
+      this.unlistTable(); // la partie commence : la table quitte la liste publique
       const matchId = lobby.ranked ? lobby.ranked.matchId : null;
       this.rankedGame = matchId ? { matchId } : null;
 
@@ -784,6 +862,7 @@
       this.resetTableState();
       this.broadcastLobby();
       this.showScreen('lobby');
+      if (lobby.visibility === 'public') this.publishTable();
     }
 
     showNetworkWarning(message) {
@@ -905,11 +984,22 @@
       const link = root.location.href.split('#')[0] + '#' + payload.code;
       el.shareRow.hidden = !online;
       el.shareLink.value = link;
-      el.lobbySubtitle.textContent = isHost
-        ? (online
-          ? 'Envoyez ce lien (ou le code) à vos amis : ils choisissent « Rejoindre » et entrent le code.'
-          : 'Donnez ce code à vos amis : ils ouvrent le jeu, choisissent « Rejoindre » et entrent le code.')
-        : 'Vous êtes à la table. La partie démarre quand l’hôte la lance.';
+      const isPublic = payload.visibility === 'public';
+      el.lobbyEyebrow.textContent = isPublic ? '🌍 Table publique · code' : '🔒 Table privée · code';
+      if (!isHost) {
+        el.lobbySubtitle.textContent = 'Vous êtes à la table. La partie démarre quand l’hôte la lance.';
+      } else if (isPublic) {
+        el.lobbySubtitle.textContent = payload.listed
+          ? 'Table publique : elle apparaît dans la liste « Rejoindre » de tous les joueurs. Vous pouvez aussi partager le code.'
+          : 'Table publique : publication dans la liste « Rejoindre »…';
+      } else {
+        el.lobbySubtitle.textContent = online
+          ? 'Table privée : envoyez ce lien (ou le code) à vos amis ; ils choisissent « Rejoindre » et entrent le code.'
+          : 'Table privée : donnez ce code à vos amis ; ils ouvrent le jeu, choisissent « Rejoindre » et entrent le code.';
+      }
+      if (isHost && this.lobby && this.lobby.listingError) {
+        el.lobbySubtitle.textContent = this.lobby.listingError;
+      }
 
       const humans = payload.players.length;
       const total = humans + payload.bots;
@@ -931,6 +1021,7 @@
       if (payload.ranked) {
         // Partie classée : pas de réglages, démarrage automatique
         el.shareRow.hidden = true;
+        el.lobbyEyebrow.textContent = '🏆 Partie classée · code';
         el.lobbySubtitle.textContent = 'Partie classée : la partie démarre dès que tous les joueurs sont là.';
         el.lobbyHost.hidden = true;
         el.lobbyWait.hidden = false;

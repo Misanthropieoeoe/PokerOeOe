@@ -289,7 +289,7 @@
           '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
       } else {
         bar.innerHTML =
-          '<span class="account-status">Vous jouez en <strong>invité</strong> : rien n’est enregistré.</span>' +
+          '<span class="account-status guest">Vous jouez en <strong>invité</strong> : rien n’est enregistré.</span>' +
           '<span class="account-buttons">' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="login">Se connecter</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signup">Créer un compte</button></span>';
