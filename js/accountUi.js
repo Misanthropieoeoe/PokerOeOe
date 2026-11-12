@@ -85,8 +85,10 @@
       el.bar.addEventListener('click', (event) => {
         const button = event.target.closest('[data-act]');
         if (!button) return;
-        if (button.dataset.act === 'profile') this.openProfile();
-        else this.openAuth(button.dataset.act);
+        const act = button.dataset.act;
+        if (act === 'profile') this.openProfile();
+        else if (act === 'signout') this.signOutFromBar(button);
+        else this.openAuth(act);
       });
 
       el.authTabs.addEventListener('change', (event) => this.showAuthForm(event.target.value));
@@ -201,7 +203,9 @@
         bar.innerHTML =
           `<span class="avatar me" aria-hidden="true">${escapeHtml(p.pseudo.charAt(0).toUpperCase())}</span>` +
           `<span class="account-status"><strong>${escapeHtml(p.pseudo)}</strong><span>${fmt(p.chips)} jetons</span></span>` +
-          '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>';
+          '<span class="account-buttons">' +
+          '<button type="button" class="btn btn-ghost btn-small" data-act="profile">Mon profil</button>' +
+          '<button type="button" class="btn btn-ghost btn-small" data-act="signout">Se déconnecter</button></span>';
       } else if (Account.user) {
         bar.innerHTML = '<span class="account-status">Chargement de votre profil…</span>';
       } else {
@@ -210,6 +214,19 @@
           '<span class="account-buttons">' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="login">Se connecter</button>' +
           '<button type="button" class="btn btn-ghost btn-small" data-act="signup">Créer un compte</button></span>';
+      }
+    }
+
+    /** Déconnexion depuis la barre de l'accueil. */
+    async signOutFromBar(button) {
+      button.disabled = true;
+      button.textContent = 'Déconnexion…';
+      try {
+        await Account.signOut();
+        this.app.setHomeError('');
+      } catch (error) {
+        this.app.setHomeError(error.message || String(error));
+        this.renderBar();
       }
     }
 
