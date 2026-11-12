@@ -435,9 +435,8 @@
       el.profileAvatar.innerHTML = Looks.avatarHtml({ name: p.pseudo, look, variant: 'me', className: 'profile-avatar' });
       el.btnAvatarRemove.hidden = !p.avatar_path;
       // Aperçu de chaque cadre avec sa propre photo (ou son initiale)
-      const owned = new Set(p.exclusive_frames || []);
       el.frameGrid.innerHTML = Looks.FRAMES
-        .filter((frame) => !frame.exclusive || owned.has(frame.id)) // exclusifs : seulement s'ils ont été attribués
+        .filter((frame) => Looks.frameOwned(p, frame)) // gratuits, achetés dans la boutique, ou exclusifs attribués
         .map((frame) => {
           const checked = (p.frame || 'or') === frame.id ? ' checked' : '';
           return `<label class="frame-option${frame.exclusive ? ' exclusive' : ''}">` +

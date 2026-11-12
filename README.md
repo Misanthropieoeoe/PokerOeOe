@@ -21,7 +21,10 @@ et un mot de passe. Un compte apporte :
 
 - un **pseudo réservé** (un invité ne peut pas le prendre) ;
 - une **apparence personnalisée** : photo de profil (on choisit soi-même la partie visible : glisser, zoomer
-  ou pincer) et cadre de couleur (Or, Argent, Rubis, Émeraude, Saphir, Améthyste, Néon, Arc-en-ciel) ;
+  ou pincer) et cadre de couleur ;
+- une **boutique** (bouton « 🛍️ Boutique ») : le cadre Or est gratuit, les autres s'achètent avec les jetons
+  (Argent 2 000, Rubis / Émeraude / Saphir 3 000, Améthyste 4 000, Néon 7 500, Arc-en-ciel 10 000) ;
+  le serveur vérifie le prix et le solde ;
 - des **titres** affichés sous le pseudo, débloqués avec les statistiques (Habitué, Vainqueur, Requin, Légende,
   Flambeur, Phénix, Magnat…) ;
 - apparence et titre sont visibles par les autres joueurs en ligne ;
@@ -79,7 +82,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 
 ## Mise à jour du site
 
-`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121546`).
+`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121553`).
 Après chaque modification, changez ce numéro (le même partout) : les navigateurs rechargent alors les
 nouveaux fichiers au lieu de garder les anciens en cache (GitHub Pages autorise jusqu'à 10 minutes de cache).
 

@@ -248,6 +248,13 @@
       return this.profile;
     }
 
+    /** Achète un cadre de la boutique (le prix est vérifié et débité par le serveur). */
+    async buyFrame(frame) {
+      this.profile = await this.rpc('buy_frame', { p_frame: frame });
+      this.emit('PROFILE');
+      return this.profile;
+    }
+
     async setFrame(frame) {
       this.profile = await this.rpc('set_frame', { p_frame: frame });
       this.emit('PROFILE');

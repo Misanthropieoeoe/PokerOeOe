@@ -101,6 +101,19 @@ create table if not exists public.open_tables (
 alter table public.open_tables enable row level security;
 -- Aucune politique : lecture et écriture uniquement par les fonctions (le jeton n'est jamais lisible).
 
+-- Cadres achetés dans la boutique (le cadre « or » est gratuit pour tous)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'profiles' and column_name = 'owned_frames') then
+    alter table public.profiles add column owned_frames text[] not null default '{}';
+    -- Les joueurs qui portaient déjà un cadre (gratuit jusqu'ici) le gardent
+    update public.profiles set owned_frames = array[frame]
+     where frame in ('argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel');
+  end if;
+end;
+$$;
+
 -- Cadres exclusifs attribués à un compte précis (voir grant_frame plus bas)
 alter table public.profiles add column if not exists exclusive_frames text[] not null default '{}';
 
@@ -274,13 +287,66 @@ begin
   if p_frame is null or p_frame not in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel', 'couronne') then
     raise exception 'Cadre inconnu.';
   end if;
-  if p_frame not in ('or', 'argent', 'rubis', 'emeraude', 'saphir', 'amethyste', 'neon', 'arcenciel') then
+  if p_frame = 'couronne' then
     -- Cadre exclusif : seulement s'il a été attribué à ce compte
     if p_frame <> all (me.exclusive_frames) then
       raise exception 'Ce cadre est réservé à un autre compte.';
     end if;
+  elsif public.frame_price(p_frame) > 0 and p_frame <> all (me.owned_frames) then
+    -- Cadre de la boutique : seulement s'il a été acheté
+    raise exception 'Achetez d''abord ce cadre dans la boutique.';
   end if;
   update public.profiles set frame = p_frame where id = uid returning * into result;
+  return result;
+end;
+$$;
+
+-- Prix des cadres de la boutique, en jetons (null : pas en vente)
+create or replace function public.frame_price(p_frame text)
+returns integer
+language sql
+immutable
+as $$
+  select case p_frame
+    when 'or'        then 0
+    when 'argent'    then 2000
+    when 'rubis'     then 3000
+    when 'emeraude'  then 3000
+    when 'saphir'    then 3000
+    when 'amethyste' then 4000
+    when 'neon'      then 7500
+    when 'arcenciel' then 10000
+    else null
+  end;
+$$;
+
+-- Acheter un cadre : les jetons sont débités, le cadre est ajouté et porté tout de suite
+create or replace function public.buy_frame(p_frame text)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid    uuid := auth.uid();
+  price  integer := public.frame_price(p_frame);
+  me     public.profiles;
+  result public.profiles;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  if price is null or price = 0 then raise exception 'Ce cadre n''est pas en vente.'; end if;
+  select * into me from public.profiles where id = uid for update;
+  if not found then raise exception 'Profil introuvable.'; end if;
+  if p_frame = any (me.owned_frames) then raise exception 'Vous possédez déjà ce cadre.'; end if;
+  if me.chips < price then
+    raise exception 'Solde insuffisant : ce cadre coûte % jetons.', price;
+  end if;
+  update public.profiles
+     set chips = chips - price,
+         owned_frames = owned_frames || array[p_frame],
+         frame = p_frame
+   where id = uid
+  returning * into result;
   return result;
 end;
 $$;
@@ -907,6 +973,7 @@ revoke all on function public.ensure_profile() from public;
 revoke all on function public.pseudo_available(text) from public;
 revoke all on function public.set_pseudo(text) from public;
 revoke all on function public.set_frame(text) from public;
+revoke all on function public.buy_frame(text) from public;
 revoke all on function public.set_avatar(text) from public;
 revoke all on function public.set_title(text) from public;
 revoke all on function public.grant_frame(text, text) from public, anon, authenticated;
@@ -931,6 +998,7 @@ grant execute on function public.pseudo_available(text) to anon, authenticated;
 grant execute on function public.ensure_profile() to authenticated;
 grant execute on function public.set_pseudo(text) to authenticated;
 grant execute on function public.set_frame(text) to authenticated;
+grant execute on function public.buy_frame(text) to authenticated;
 grant execute on function public.set_avatar(text) to authenticated;
 grant execute on function public.set_title(text) to authenticated;
 grant execute on function public.start_game(integer, bigint) to authenticated;

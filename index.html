@@ -10,7 +10,7 @@
   <link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=202611121546">
+  <link rel="stylesheet" href="style.css?v=202611121553">
 </head>
 <body>
 
@@ -92,8 +92,9 @@
       </form>
 
       <div class="home-links">
-        <button type="button" class="btn btn-ghost" data-open-rules="regles">📖 Règles du poker</button>
+        <button type="button" class="btn btn-ghost" data-open-rules="regles">📖 Règles</button>
         <button type="button" class="btn btn-ghost" id="btn-leaderboard">🏆 Classement</button>
+        <button type="button" class="btn btn-ghost" data-open-shop>🛍️ Boutique</button>
       </div>
 
       <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu. Le jeu en ligne nécessite une connexion Internet.</p>
@@ -178,8 +179,9 @@
           <button type="button" class="btn btn-ghost btn-small" id="btn-avatar-remove">Retirer la photo</button>
         </div>
         <fieldset class="frame-picker">
-          <legend class="field-label">Cadre</legend>
+          <legend class="field-label">Mes cadres</legend>
           <div class="frame-grid" id="frame-grid"></div>
+          <button type="button" class="btn btn-ghost btn-small shop-link" data-open-shop>🛍️ Plus de cadres dans la boutique</button>
         </fieldset>
         <fieldset class="title-picker">
           <legend class="field-label">Titre <span class="legend-note" id="title-count"></span></legend>
@@ -245,6 +247,29 @@
       <button type="button" class="btn btn-primary btn-large" id="btn-lb-back">Retour</button>
     </div>
   </section>
+
+  <!-- ============ Boutique ============ -->
+  <dialog class="rules-dialog shop-dialog" id="shop-dialog" aria-labelledby="shop-title">
+    <div class="rules-head">
+      <h2 id="shop-title">🛍️ Boutique</h2>
+      <button type="button" class="btn btn-ghost btn-small" id="btn-shop-close" aria-label="Fermer la boutique">✕</button>
+    </div>
+    <div class="rules-body">
+      <div class="shop-balance-row">
+        <span class="field-label">Votre solde</span>
+        <strong id="shop-balance">—</strong>
+      </div>
+      <div class="shop-notice" id="shop-notice" hidden>
+        <p id="shop-notice-text"></p>
+        <button type="button" class="btn btn-primary btn-small" id="shop-login">Se connecter</button>
+      </div>
+      <p class="rules-intro">Des cadres pour votre avatar, visibles à la table et par les autres joueurs en ligne.
+        Achetés avec vos jetons fictifs ; une fois achetés, ils sont à vous pour toujours.</p>
+      <p class="form-error" id="shop-error" role="alert" hidden></p>
+      <p class="form-success" id="shop-success" role="status" hidden></p>
+      <ul class="shop-grid" id="shop-grid"></ul>
+    </div>
+  </dialog>
 
   <!-- ============ Règles du poker ============ -->
   <dialog class="rules-dialog" id="rules-dialog" aria-labelledby="rules-title">
@@ -472,19 +497,20 @@
     </div>
   </section>
 
-  <script src="js/deck.js?v=202611121546"></script>
-  <script src="js/handEvaluator.js?v=202611121546"></script>
-  <script src="js/game.js?v=202611121546"></script>
-  <script src="js/bot.js?v=202611121546"></script>
-  <script src="js/session.js?v=202611121546"></script>
-  <script src="js/net.js?v=202611121546"></script>
-  <script src="js/config.js?v=202611121546"></script>
-  <script src="js/looks.js?v=202611121546"></script>
-  <script src="js/account.js?v=202611121546"></script>
-  <script src="js/accountUi.js?v=202611121546"></script>
-  <script src="js/ranked.js?v=202611121546"></script>
-  <script src="js/tables.js?v=202611121546"></script>
-  <script src="js/rules.js?v=202611121546"></script>
-  <script src="js/ui.js?v=202611121546"></script>
+  <script src="js/deck.js?v=202611121553"></script>
+  <script src="js/handEvaluator.js?v=202611121553"></script>
+  <script src="js/game.js?v=202611121553"></script>
+  <script src="js/bot.js?v=202611121553"></script>
+  <script src="js/session.js?v=202611121553"></script>
+  <script src="js/net.js?v=202611121553"></script>
+  <script src="js/config.js?v=202611121553"></script>
+  <script src="js/looks.js?v=202611121553"></script>
+  <script src="js/account.js?v=202611121553"></script>
+  <script src="js/accountUi.js?v=202611121553"></script>
+  <script src="js/ranked.js?v=202611121553"></script>
+  <script src="js/tables.js?v=202611121553"></script>
+  <script src="js/shop.js?v=202611121553"></script>
+  <script src="js/rules.js?v=202611121553"></script>
+  <script src="js/ui.js?v=202611121553"></script>
 </body>
 </html>

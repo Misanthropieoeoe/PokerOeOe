@@ -12,21 +12,31 @@
 
   const Poker = (root.Poker = root.Poker || {});
 
-  /** Cadres proposés dans « Mon profil ». */
+  /**
+   * Cadres. price : prix en jetons dans la boutique (0 = gratuit) — mêmes prix que
+   * frame_price dans supabase/schema.sql, qui fait foi au moment de l'achat.
+   */
   const FRAMES = [
-    { id: 'or', name: 'Or' },
-    { id: 'argent', name: 'Argent' },
-    { id: 'rubis', name: 'Rubis' },
-    { id: 'emeraude', name: 'Émeraude' },
-    { id: 'saphir', name: 'Saphir' },
-    { id: 'amethyste', name: 'Améthyste' },
-    { id: 'neon', name: 'Néon' },
-    { id: 'arcenciel', name: 'Arc-en-ciel' },
+    { id: 'or', name: 'Or', price: 0 },
+    { id: 'argent', name: 'Argent', price: 2000 },
+    { id: 'rubis', name: 'Rubis', price: 3000 },
+    { id: 'emeraude', name: 'Émeraude', price: 3000 },
+    { id: 'saphir', name: 'Saphir', price: 3000 },
+    { id: 'amethyste', name: 'Améthyste', price: 4000 },
+    { id: 'neon', name: 'Néon', price: 7500 },
+    { id: 'arcenciel', name: 'Arc-en-ciel', price: 10000 },
     // Cadres exclusifs : visibles seulement pour les comptes à qui ils ont été attribués
     // (supabase/schema.sql : select public.grant_frame('adresse@exemple.fr', 'couronne');)
     { id: 'couronne', name: 'Couronne', exclusive: true },
   ];
   const FRAME_IDS = new Set(FRAMES.map((f) => f.id));
+
+  /** Le joueur peut-il porter ce cadre ? (gratuit, acheté, ou exclusif attribué) */
+  function frameOwned(profile, frame) {
+    if (!profile) return false;
+    if (frame.exclusive) return (profile.exclusive_frames || []).includes(frame.id);
+    return !frame.price || (profile.owned_frames || []).includes(frame.id);
+  }
 
   /**
    * Titres affichés sous le pseudo, débloqués grâce aux statistiques.
@@ -301,6 +311,6 @@
 
   Poker.Looks = Object.freeze({
     FRAMES, TITLES, sanitize, avatarHtml, readImageFile, exportAvatar, avatarPrefix,
-    titleUnlocked, titleName, Cropper,
+    titleUnlocked, titleName, Cropper, frameOwned,
   });
 })(typeof window !== 'undefined' ? window : globalThis);
