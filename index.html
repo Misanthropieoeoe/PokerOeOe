@@ -21,8 +21,9 @@
       <form id="home-form" autocomplete="off" novalidate>
         <div class="segmented mode-tabs" role="radiogroup" aria-label="Mode de jeu">
           <label><input type="radio" name="mode" value="solo" checked><span>Solo</span></label>
-          <label><input type="radio" name="mode" value="create"><span>Créer une table</span></label>
+          <label><input type="radio" name="mode" value="create"><span>Créer</span></label>
           <label><input type="radio" name="mode" value="join"><span>Rejoindre</span></label>
+          <label><input type="radio" name="mode" value="ranked"><span>Classée</span></label>
         </div>
 
         <label class="field">
@@ -55,12 +56,20 @@
           <input id="input-code" type="text" maxlength="8" placeholder="Ex. K7PQ2" autocapitalize="characters" spellcheck="false">
         </label>
 
+        <div class="ranked-info" data-modes="ranked">
+          <p class="field-hint">Partie classée : le jeu vous trouve 1 à 5 adversaires de niveau proche. Votre cote monte ou
+            descend selon votre place. Mise : 1 000 jetons ; abandonner en cours de partie coûte 15 points de cote.</p>
+          <ul class="requirements" id="ranked-requirements"></ul>
+        </div>
+
         <p class="field-hint" data-modes="create">Vous recevrez un code à partager. Vos amis rejoignent depuis leur téléphone ou leur ordinateur ; des bots complètent la table si besoin.</p>
 
         <p class="form-error" id="home-error" role="alert" hidden></p>
 
         <button type="submit" class="btn btn-primary btn-large" id="btn-start">Commencer la partie</button>
       </form>
+
+      <button type="button" class="btn btn-ghost btn-leaderboard" id="btn-leaderboard">🏆 Classement</button>
 
       <p class="disclaimer">1 000 jetons fictifs au départ · les blinds augmentent toutes les 10 mains.<br>Aucun argent réel n'est en jeu. Le jeu en ligne nécessite une connexion Internet.</p>
     </div>
@@ -130,6 +139,7 @@
           <h1 id="profile-title">Joueur</h1>
           <p class="player-title" id="profile-player-title"></p>
           <p class="home-subtitle" id="profile-email"></p>
+          <p class="verified-line" id="profile-verified"></p>
         </div>
       </div>
 
@@ -178,6 +188,36 @@
         <button type="button" class="btn btn-primary btn-large" id="btn-profile-back">Retour au jeu</button>
         <button type="button" class="btn btn-ghost" id="btn-signout">Se déconnecter</button>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ Recherche d'une partie classée ============ -->
+  <section id="screen-queue" class="screen" aria-labelledby="queue-title">
+    <div class="home-card queue-card">
+      <div class="queue-spinner" aria-hidden="true"><span>♠</span><span class="red">♥</span><span>♣</span><span class="red">♦</span></div>
+      <h1 id="queue-title">Partie classée</h1>
+      <p class="home-subtitle" id="queue-status" aria-live="polite">Recherche d’adversaires…</p>
+      <p class="queue-meta" id="queue-meta"></p>
+      <ul class="lobby-players" id="queue-players"></ul>
+      <p class="field-hint">Tables de 2 à 6 joueurs ayant un compte vérifié, de cote proche. L’écart accepté grandit avec l’attente.</p>
+      <p class="form-error" id="queue-error" role="alert" hidden></p>
+      <button type="button" class="btn btn-ghost" id="btn-queue-cancel">Annuler la recherche</button>
+    </div>
+  </section>
+
+  <!-- ============ Classement ============ -->
+  <section id="screen-leaderboard" class="screen" aria-labelledby="lb-title">
+    <div class="home-card leaderboard-card">
+      <h1 id="lb-title">Classement</h1>
+      <div class="segmented" id="lb-tabs" role="radiogroup" aria-label="Type de classement">
+        <label><input type="radio" name="lb-sort" value="cote" checked><span>Cote</span></label>
+        <label><input type="radio" name="lb-sort" value="jetons"><span>Jetons</span></label>
+        <label><input type="radio" name="lb-sort" value="victoires"><span>Victoires</span></label>
+      </div>
+      <p class="field-hint" id="lb-hint"></p>
+      <ol class="leaderboard" id="lb-list"></ol>
+      <p class="form-error" id="lb-error" role="alert" hidden></p>
+      <button type="button" class="btn btn-primary btn-large" id="btn-lb-back">Retour</button>
     </div>
   </section>
 
@@ -249,6 +289,7 @@
         <span id="info-hand" class="pill">Main n°1</span>
         <span id="info-blinds" class="pill">Blinds 10 / 20</span>
         <span id="info-table" class="pill pill-muted" hidden></span>
+        <span id="info-ranked" class="pill pill-ranked" hidden>Classée</span>
       </div>
       <div class="topbar-actions">
         <button id="btn-log" class="btn btn-ghost btn-small" type="button" aria-controls="log-panel">Historique</button>
@@ -338,6 +379,7 @@
   <script src="js/looks.js"></script>
   <script src="js/account.js"></script>
   <script src="js/accountUi.js"></script>
+  <script src="js/ranked.js"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>

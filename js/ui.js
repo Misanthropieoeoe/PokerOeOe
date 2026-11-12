@@ -29,7 +29,8 @@
     moyen: 'Des bots solides qui calculent leurs chances.',
     difficile: 'Des bots agressifs, attentifs à la position… et qui bluffent.',
   };
-  const START_LABELS = { solo: 'Commencer la partie', create: 'Créer la table', join: 'Rejoindre la table' };
+  const START_LABELS = { solo: 'Commencer la partie', create: 'Créer la table', join: 'Rejoindre la table', ranked: 'Chercher des adversaires' };
+  const RANKED_LOBBY_MS = 40000; // partie classée : démarrage automatique au plus tard après 40 s
 
   const HEARTBEAT_MS = 2000;      // fréquence des « ping » réseau
   const GUEST_TIMEOUT_MS = 9000;  // invité silencieux → considéré déconnecté
@@ -101,6 +102,8 @@
           auth: byId('screen-auth'),
           profile: byId('screen-profile'),
           lobby: byId('screen-lobby'),
+          queue: byId('screen-queue'),
+          leaderboard: byId('screen-leaderboard'),
           game: byId('screen-game'),
           end: byId('screen-end'),
         },
@@ -125,6 +128,7 @@
         infoHand: byId('info-hand'),
         infoBlinds: byId('info-blinds'),
         infoTable: byId('info-table'),
+        infoRanked: byId('info-ranked'),
         tableWrap: byId('table-wrap'),
         table: byId('table'),
         pot: byId('pot'),
@@ -187,6 +191,8 @@
 
       this.bindEvents();
       this.accountUi = new Poker.AccountUI(this); // comptes joueurs (accountUi.js)
+      this.rankedUi = new Poker.RankedUI(this);   // parties classées et classement (ranked.js)
+      this.rankedGame = null;                     // { matchId } pendant une partie classée
       this.applySettingsToForm();
       this.prefillFromHash();
       // Rafraîchit les comptes à rebours affichés
@@ -292,6 +298,15 @@
         if (this.homeBusy) return;
         const data = new FormData(el.form);
         const mode = this.homeMode;
+        if (mode === 'ranked') {
+          // Partie classée : compte vérifié obligatoire (contrôlé aussi par le serveur)
+          // Le pseudo du compte sert à se reconnaître entre joueurs de la table classée
+          this.settings = Object.assign({}, this.settings, { mode, name: this.accountUi.effectiveName(this.settings.name) });
+          this.saveSettings();
+          this.setHomeError('');
+          this.rankedUi.start();
+          return;
+        }
         const name = this.accountUi.effectiveName(cleanName(el.nameInput.value));
         // Compte : solde suffisant ; invité : pseudo non réservé par un compte
         this.setHomeBusy('Vérification…');
@@ -368,7 +383,10 @@
 
       // Fin de partie
       el.btnReplay.addEventListener('click', async () => {
-        if (this.mode === 'solo') {
+        if (this.rankedGame) {
+          this.leaveToHome();
+          this.rankedUi.start();
+        } else if (this.mode === 'solo') {
           const problem = await this.accountUi.checkBeforePlay(this.settings.name);
           if (problem) this.leaveToHome(problem);
           else this.startSolo();
@@ -424,9 +442,13 @@
     /** Connexion perdue avec l'hôte : une tentative automatique pour reprendre sa place. */
     reconnectToHost() {
       const code = this.clientCode;
+      const ranked = this.pendingRanked;
+      // La partie suivie sur le compte continue après la reconnexion
+      this.reconnecting = true;
       this.leaveToHome();
       this.setHomeError('');
-      this.joinTable(code, true);
+      this.joinTable(code, true, ranked);
+      this.reconnecting = false;
     }
 
     resetQuitButton() {
@@ -444,7 +466,9 @@
     }
 
     teardown() {
-      if (this.accountUi) this.accountUi.abandon();
+      if (this.accountUi && !this.reconnecting) this.accountUi.abandon();
+      if (this.lobby && this.lobby.rankedTimer) clearInterval(this.lobby.rankedTimer);
+      if (!this.reconnecting) this.rankedGame = null;
       if (this.runner) this.runner.stop();
       this.runner = null;
       if (this.net) {
@@ -501,6 +525,7 @@
       this.resetTableState();
       this.el.infoTable.hidden = !multiplayer;
       if (multiplayer) this.el.infoTable.textContent = `Table ${this.lobby.code}`;
+      this.el.infoRanked.hidden = !this.rankedGame;
       this.runner = new GameRunner(game, {
         difficulty,
         speed: this.speed,
@@ -541,7 +566,13 @@
     /* Hôte d'une table en ligne                                         */
     /* ---------------------------------------------------------------- */
 
-    async createTable() {
+    /**
+     * Crée une table en ligne.
+     * @param {Object} [options]
+     * @param {{matchId:number, players:string[]}} [options.ranked] table formée par le matchmaking
+     * @returns {Promise<string|null>} code de la table, ou null en cas d'échec
+     */
+    async createTable(options = {}) {
       this.teardown();
       this.setHomeBusy('Création de la table…');
       let net;
@@ -550,7 +581,7 @@
       } catch (error) {
         this.setHomeBusy(null);
         this.setHomeError(error.message);
-        return;
+        return null;
       }
       this.setHomeBusy(null);
       this.mode = 'host';
@@ -562,12 +593,45 @@
         difficulty: this.settings.difficulty,
         guests: [],      // { token, name, conn, connected, seat }
         started: false,
+        ranked: null,
       };
+      if (options.ranked) {
+        // Partie classée : seuls les joueurs choisis par le matchmaking, sans bots ; démarrage automatique
+        const me = this.lobby.hostName.toLowerCase();
+        this.lobby.bots = 0;
+        this.lobby.ranked = {
+          matchId: options.ranked.matchId,
+          expected: new Set(options.ranked.players.map((n) => n.toLowerCase()).filter((n) => n !== me)),
+          deadline: Date.now() + RANKED_LOBBY_MS,
+        };
+        this.lobby.rankedTimer = setInterval(() => this.checkRankedLobby(), 1000);
+      }
       net.on('message', (conn, message) => this.onHostMessage(conn, message));
       net.on('disconnect', (conn) => this.onGuestLeft(conn));
       net.on('error', (message) => this.showNetworkWarning(message));
       this.broadcastLobby();
       this.showScreen('lobby');
+      return net.code;
+    }
+
+    /** Partie classée : démarre dès que tout le monde est là, ou à la fin du délai. */
+    checkRankedLobby() {
+      const { lobby } = this;
+      if (this.mode !== 'host' || !lobby || !lobby.ranked || lobby.started) return;
+      const present = lobby.guests.filter((g) => g.connected).length;
+      if (present >= lobby.ranked.expected.size) {
+        this.startHostedGame();
+      } else if (Date.now() >= lobby.ranked.deadline) {
+        if (present >= 1) {
+          this.startHostedGame();
+        } else {
+          Poker.Account.cancelMatch(lobby.ranked.matchId).catch(() => {});
+          this.leaveToHome();
+          this.rankedUi.restart('Aucun adversaire n’a rejoint la table. Nouvelle recherche…');
+        }
+      } else {
+        this.broadcastLobby(); // compte à rebours
+      }
     }
 
     onHostMessage(conn, message) {
@@ -611,6 +675,9 @@
         setTimeout(() => net.close(conn), 400);
       };
       if (lobby.started) return refuse('La partie a déjà commencé. Réessayez quand l’hôte aura relancé une partie.');
+      if (lobby.ranked && !lobby.ranked.expected.has(cleanName(message.name).toLowerCase())) {
+        return refuse('Cette table est réservée à une partie classée.');
+      }
       if (1 + lobby.guests.length >= MAX_SEATS) return refuse(`La table est complète (${MAX_SEATS} joueurs maximum).`);
 
       // Pseudo unique à la table
@@ -627,6 +694,7 @@
       lobby.bots = Math.min(lobby.bots, MAX_SEATS - 1 - lobby.guests.length);
       net.send(conn, { t: 'welcome', code: lobby.code, name });
       this.broadcastLobby();
+      if (lobby.ranked) this.checkRankedLobby();
     }
 
     onGuestLeft(conn) {
@@ -659,6 +727,9 @@
           .concat(lobby.guests.map((g) => ({ name: g.name, account: g.account, look: g.look }))),
         bots: lobby.bots,
         difficulty: lobby.difficulty,
+        ranked: lobby.ranked
+          ? { players: lobby.ranked.expected.size + 1, secondsLeft: Math.max(0, Math.ceil((lobby.ranked.deadline - Date.now()) / 1000)) }
+          : null,
       };
     }
 
@@ -691,10 +762,13 @@
       guests.forEach((g, i) => { g.seat = i + 1; });
       lobby.guests = guests;
       lobby.started = true;
+      if (lobby.rankedTimer) clearInterval(lobby.rankedTimer);
+      const matchId = lobby.ranked ? lobby.ranked.matchId : null;
+      this.rankedGame = matchId ? { matchId } : null;
 
       const game = new PokerGame({ players, startingChips: STARTING_CHIPS, handsPerLevel: HANDS_PER_LEVEL });
-      guests.forEach((g) => this.net.send(g.conn, { t: 'start', code: lobby.code, players: players.length }));
-      this.accountUi.beginGame(players.length);
+      guests.forEach((g) => this.net.send(g.conn, { t: 'start', code: lobby.code, players: players.length, matchId }));
+      this.accountUi.beginGame(players.length, matchId);
       this.startRunner(game, { difficulty: lobby.difficulty, multiplayer: true });
     }
 
@@ -729,14 +803,19 @@
      * @param {string} code code de la table
      * @param {boolean} [retry=false] reconnexion automatique après une coupure
      */
-    async joinTable(code, retry = false) {
+    async joinTable(code, retry = false, ranked = null) {
       this.teardown();
+      this.pendingRanked = ranked; // partie classée : en cas d'échec, retour à la recherche
       this.setHomeBusy(retry ? 'Reconnexion à la table…' : 'Connexion à la table…');
       let net;
       try {
         net = await Net.ClientNetwork.connect(code);
       } catch (error) {
         this.setHomeBusy(null);
+        if (ranked && !retry) {
+          this.rankedUi.joinFailed(error.message);
+          return;
+        }
         this.setHomeError(retry
           ? 'La connexion avec la table a été perdue. Rejoignez-la avec le même code pour reprendre votre place.'
           : error.message);
@@ -759,7 +838,9 @@
       net.send({ t: 'join', name: this.settings.name, token: this.token, account: Poker.Account.signedIn, look: Poker.Account.look });
       // Sans réponse de l'hôte, on abandonne.
       setTimeout(() => {
-        if (this.mode === 'client' && this.net === net && this.homeBusy) this.leaveToHome('La table ne répond pas.');
+        if (this.mode !== 'client' || this.net !== net || !this.homeBusy) return;
+        this.leaveToHome('La table ne répond pas.');
+        if (ranked && !retry) this.rankedUi.joinFailed('La table ne répond pas.');
       }, 10000);
     }
 
@@ -770,9 +851,12 @@
           this.setHomeBusy(null);
           this.myName = message.name; // pseudo attribué par l'hôte (un numéro est ajouté en cas de doublon)
           break;
-        case 'refused':
+        case 'refused': {
+          const ranked = this.pendingRanked;
           this.leaveToHome(message.reason);
+          if (ranked) this.rankedUi.joinFailed(message.reason);
           break;
+        }
         case 'closed':
           this.leaveToHome('L’hôte a fermé la table.');
           break;
@@ -784,7 +868,9 @@
           break;
         case 'start':
           this.resetTableState();
-          this.accountUi.beginGame(Number(message.players) || 2);
+          this.rankedGame = message.matchId ? { matchId: Number(message.matchId) } : null;
+          this.el.infoRanked.hidden = !this.rankedGame;
+          this.accountUi.beginGame(Number(message.players) || 2, this.rankedGame ? this.rankedGame.matchId : null);
           break;
         case 'logs':
           this.el.logList.innerHTML = '';
@@ -842,6 +928,17 @@
       }
       el.lobbyPlayers.innerHTML = items.join('');
 
+      if (payload.ranked) {
+        // Partie classée : pas de réglages, démarrage automatique
+        el.shareRow.hidden = true;
+        el.lobbySubtitle.textContent = 'Partie classée : la partie démarre dès que tous les joueurs sont là.';
+        el.lobbyHost.hidden = true;
+        el.lobbyWait.hidden = false;
+        el.lobbyWait.textContent = `${humans} / ${payload.ranked.players} joueurs à la table · ` +
+          `démarrage au plus tard dans ${payload.ranked.secondsLeft} s`;
+        el.lobbyCount.textContent = `${humans} / ${payload.ranked.players}`;
+        return;
+      }
       el.lobbyHost.hidden = !isHost;
       el.lobbyWait.hidden = isHost;
       if (isHost) {
@@ -1343,10 +1440,15 @@
       }).join('');
 
       // Boutons selon le mode
-      el.endWait.hidden = this.mode !== 'client';
+      el.endWait.hidden = this.mode !== 'client' || !!this.rankedGame;
       el.btnReplay.hidden = this.mode === 'client';
       el.btnReplay.textContent = this.mode === 'host' ? 'Nouvelle partie à cette table' : 'Rejouer';
       el.btnSettings.textContent = this.mode === 'solo' ? 'Changer les réglages' : this.mode === 'host' ? 'Fermer la table' : 'Quitter la table';
+      if (this.rankedGame) {
+        el.btnReplay.hidden = false;
+        el.btnReplay.textContent = 'Nouvelle partie classée';
+        el.btnSettings.textContent = 'Retour à l’accueil';
+      }
       this.accountUi.renderEndLine();
       this.showScreen('end');
     }

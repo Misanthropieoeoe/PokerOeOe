@@ -64,6 +64,7 @@
         profilePlayerTitle: byId('profile-player-title'),
         profileTitle: byId('profile-title'),
         profileEmail: byId('profile-email'),
+        profileVerified: byId('profile-verified'),
         profileChips: byId('profile-chips'),
         btnRefill: byId('btn-refill'),
         refillHint: byId('profile-refill-hint'),
@@ -186,6 +187,15 @@
           return 'Pseudo modifié.';
         });
       });
+      // Renvoi de l'e-mail de confirmation
+      el.profileVerified.addEventListener('click', (event) => {
+        if (!event.target.closest('[data-act=resend]')) return;
+        this.runProfile(async () => {
+          await Account.resendConfirmation();
+          return `E-mail de confirmation envoyé à ${Account.user.email}. Cliquez sur le lien, puis reconnectez-vous.`;
+        });
+      });
+
       // Apparence : photo et cadre
       el.avatarFile.addEventListener('change', () => {
         const file = el.avatarFile.files && el.avatarFile.files[0];
@@ -452,6 +462,11 @@
           `<span class="title-goal">${title.goal}${progress}</span></label>`;
       }).join('');
       el.profileEmail.textContent = Account.user ? Account.user.email : '';
+      // Adresse confirmée : condition des parties classées
+      el.profileVerified.innerHTML = Account.verified
+        ? `<span class="verified">✓ Adresse e-mail confirmée</span> · Cote ${fmt(p.rating || 1000)}`
+        : '<span class="unverified">Adresse e-mail non confirmée</span> ' +
+          '<button type="button" class="link-button" data-act="resend">Renvoyer l’e-mail de confirmation</button>';
       el.profileChips.textContent = fmt(p.chips);
       if (document.activeElement !== el.pseudoInput) el.pseudoInput.value = p.pseudo;
 
@@ -506,13 +521,21 @@
     /* ---------------------------------------------------------------- */
 
     /** Une partie commence : la mise est prélevée sur le compte (si connecté). */
-    beginGame(players) {
+    /**
+     * @param {number} players nombre de joueurs
+     * @param {number} [matchId] partie classée (la cote est mise à jour à la fin)
+     */
+    beginGame(players, matchId) {
       if (!Account.signedIn) {
         this.current = null;
         return;
       }
-      const game = { handsWon: 0, biggestPot: 0, countedHand: -1, finished: false, outcome: '' };
-      game.idPromise = Account.startGame(players).catch((error) => {
+      const game = {
+        handsWon: 0, biggestPot: 0, countedHand: -1, finished: false, outcome: '',
+        ranked: !!matchId,
+        ratingBefore: Account.profile.rating,
+      };
+      game.idPromise = Account.startGame(players, matchId || null).catch((error) => {
         this.app.appendLog({ text: `Compte : ${error.message} Cette partie ne sera pas enregistrée.`, kind: 'elim' });
         return null;
       });
@@ -557,6 +580,10 @@
             .then((profile) => {
               const delta = finalChips - BUY_IN;
               game.outcome = `Compte : ${delta >= 0 ? '+' : '−'}${fmt(Math.abs(delta))} jetons · nouveau solde ${fmt(profile.chips)} jetons.`;
+              if (game.ranked && game.ratingBefore != null) {
+                const change = profile.rating - game.ratingBefore;
+                game.outcome += ` Cote : ${fmt(profile.rating)} (${change >= 0 ? '+' : '−'}${fmt(Math.abs(change))}).`;
+              }
             });
         })
         .catch((error) => {

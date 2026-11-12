@@ -310,10 +310,59 @@
       return this.profile;
     }
 
-    /** Début de partie : prélève la mise. @returns {Promise<number>} identifiant de la partie */
-    async startGame(players) {
-      const id = await this.rpc('start_game', { p_players: players });
-      if (this.profile) this.profile = Object.assign({}, this.profile, { chips: this.profile.chips - BUY_IN });
+    /** Adresse e-mail confirmée ? (condition des parties classées) */
+    get verified() {
+      return !!(this.user && this.user.email_confirmed_at);
+    }
+
+    /** Renvoie l'e-mail de confirmation d'adresse. */
+    async resendConfirmation() {
+      if (!this.user) throw new Error('Vous devez être connecté.');
+      const { error } = await this.requireClient().auth.resend({
+        type: 'signup',
+        email: this.user.email,
+        options: { emailRedirectTo: this.redirectUrl() },
+      });
+      if (error) throw new Error(translateError(error));
+    }
+
+    /** Adresse publique d'une photo à partir de son chemin dans le stockage. */
+    publicAvatarUrl(path) {
+      if (!path || !this.client) return null;
+      return this.client.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Parties classées et classement                                    */
+    /* ---------------------------------------------------------------- */
+
+    joinQueue() { return this.rpc('join_queue'); }
+    pollQueue() { return this.rpc('poll_queue'); }
+    leaveQueue() { return this.rpc('leave_queue'); }
+    setMatchCode(matchId, code) { return this.rpc('set_match_code', { p_match: matchId, p_code: code }); }
+    cancelMatch(matchId) { return this.rpc('cancel_match', { p_match: matchId }); }
+
+    /** Classement public : 'cote', 'jetons' ou 'victoires'. */
+    async leaderboard(sort) {
+      return (await this.rpc('leaderboard', { p_sort: sort, p_limit: 50 })) || [];
+    }
+
+    /**
+     * Début de partie : prélève la mise (et 15 points de cote d'avance en partie classée).
+     * @param {number} players nombre de joueurs à la table
+     * @param {number} [matchId] partie classée formée par le matchmaking
+     * @returns {Promise<number>} identifiant de la partie
+     */
+    async startGame(players, matchId) {
+      const args = { p_players: players };
+      if (matchId) args.p_match = matchId;
+      const id = await this.rpc('start_game', args);
+      if (this.profile) {
+        this.profile = Object.assign({}, this.profile, {
+          chips: this.profile.chips - BUY_IN,
+          rating: matchId ? Math.max(0, this.profile.rating - 15) : this.profile.rating,
+        });
+      }
       this.emit('PROFILE');
       return id;
     }

@@ -45,6 +45,45 @@ create index if not exists games_user_idx on public.games (user_id);
 -- Personnalisation du profil : cadre de couleur et photo (chemin dans le stockage « avatars »)
 alter table public.profiles add column if not exists frame text not null default 'or';
 alter table public.profiles add column if not exists avatar_path text;
+-- Parties classées : cote (style Elo) et statistiques dédiées
+alter table public.profiles add column if not exists rating integer not null default 1000;
+alter table public.profiles add column if not exists ranked_played integer not null default 0;
+alter table public.profiles add column if not exists ranked_wins integer not null default 0;
+
+-- File d'attente du matchmaking (comptes vérifiés uniquement)
+create table if not exists public.match_queue (
+  user_id   uuid primary key references auth.users (id) on delete cascade,
+  rating    integer not null,
+  joined_at timestamptz not null default now(),
+  last_seen timestamptz not null default now()
+);
+
+-- Tables formées par le matchmaking : l'hôte publie le code de sa table
+create table if not exists public.matches (
+  id         bigint generated always as identity primary key,
+  host_id    uuid not null references auth.users (id) on delete cascade,
+  code       text,
+  status     text not null default 'forming' check (status in ('forming', 'playing', 'cancelled')),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.match_players (
+  match_id      bigint not null references public.matches (id) on delete cascade,
+  user_id       uuid not null references auth.users (id) on delete cascade,
+  pseudo        text not null,
+  rating_before integer not null,
+  opponents_avg integer not null,
+  primary key (match_id, user_id)
+);
+create index if not exists match_players_user_idx on public.match_players (user_id);
+
+alter table public.games add column if not exists match_id bigint references public.matches (id) on delete set null;
+alter table public.games add column if not exists rating_delta integer;
+
+alter table public.match_queue enable row level security;
+alter table public.matches enable row level security;
+alter table public.match_players enable row level security;
+-- Aucune politique : ces tables ne sont lues et écrites que par les fonctions ci-dessous.
+
 -- Cadres exclusifs attribués à un compte précis (voir grant_frame plus bas)
 alter table public.profiles add column if not exists exclusive_frames text[] not null default '{}';
 
@@ -230,6 +269,226 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Matchmaking (parties classées) : comptes à l'adresse e-mail confirmée uniquement
+-- Les joueurs appellent poll_queue toutes les 2 secondes ; le serveur forme les tables.
+-- ---------------------------------------------------------------------------
+
+-- Le compte a-t-il confirmé son adresse e-mail ?
+create or replace function public.account_verified(p_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select email_confirmed_at is not null from auth.users where id = p_user), false);
+$$;
+
+-- Partie classée en cours (ou en formation) pour un joueur
+create or replace function public.current_match(p_user uuid)
+returns public.matches
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select m.* from public.matches m
+  join public.match_players mp on mp.match_id = m.id
+  where mp.user_id = p_user
+    and m.status in ('forming', 'playing')
+    and m.created_at > now() - interval '3 hours'
+    and not exists (select 1 from public.games g where g.match_id = m.id and g.user_id = p_user and g.finished_at is not null)
+    -- une table jamais lancée est abandonnée au bout de 75 secondes
+    and (m.status = 'playing' or m.created_at > now() - interval '75 seconds')
+  order by m.id desc
+  limit 1;
+$$;
+
+-- Entrer dans la file d'attente
+create or replace function public.join_queue()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  me  public.profiles;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  if not public.account_verified(uid) then
+    raise exception 'Confirmez votre adresse e-mail pour jouer en partie classée.';
+  end if;
+  select * into me from public.profiles where id = uid;
+  if not found then raise exception 'Profil introuvable.'; end if;
+  if me.chips < 1000 then
+    raise exception 'Solde insuffisant : il faut 1 000 jetons pour une partie classée.';
+  end if;
+  -- Déjà placé à une table : on ne rentre pas une deuxième fois dans la file
+  if (public.current_match(uid)).id is not null then
+    return public.poll_queue();
+  end if;
+  insert into public.match_queue (user_id, rating) values (uid, me.rating)
+  on conflict (user_id) do update set last_seen = now(), rating = excluded.rating;
+  return public.poll_queue();
+end;
+$$;
+
+-- Quitter la file d'attente
+create or replace function public.leave_queue()
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.match_queue where user_id = auth.uid();
+$$;
+
+-- État du joueur dans le matchmaking ; forme une table quand c'est possible
+create or replace function public.poll_queue()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid      uuid := auth.uid();
+  m        public.matches;
+  oldest   public.match_queue;
+  waited   numeric;
+  gap      numeric;
+  chosen   uuid[];
+  new_id   bigint;
+  mine     public.match_queue;
+begin
+  if uid is null then raise exception 'Vous devez être connecté.'; end if;
+  perform pg_advisory_xact_lock(724001); -- un seul appel à la fois forme les tables
+
+  -- Déjà placé à une table ?
+  m := public.current_match(uid);
+  if m.id is not null then
+    return jsonb_build_object(
+      'status', 'matched',
+      'match_id', m.id,
+      'role', case when m.host_id = uid then 'host' else 'guest' end,
+      'code', m.code,
+      'players', (select jsonb_agg(jsonb_build_object('pseudo', pseudo, 'rating', rating_before) order by rating_before desc)
+                  from public.match_players where match_id = m.id));
+  end if;
+
+  update public.match_queue set last_seen = now() where user_id = uid returning * into mine;
+  if mine.user_id is null then
+    return jsonb_build_object('status', 'idle');
+  end if;
+
+  -- Les joueurs qui ne donnent plus de nouvelles quittent la file
+  delete from public.match_queue where last_seen < now() - interval '15 seconds';
+
+  -- Table autour du joueur qui attend depuis le plus longtemps, cotes proches
+  -- (l'écart toléré grandit avec l'attente : 150 points + 25 par seconde)
+  select * into oldest from public.match_queue order by joined_at limit 1;
+  waited := extract(epoch from now() - oldest.joined_at);
+  gap := 150 + 25 * waited;
+  select array_agg(user_id) into chosen from (
+    select user_id from public.match_queue
+    where abs(rating - oldest.rating) <= gap
+      and (public.current_match(user_id)).id is null
+    order by joined_at
+    limit 6
+  ) c;
+
+  if coalesce(array_length(chosen, 1), 0) >= 6
+     or (coalesce(array_length(chosen, 1), 0) >= 2 and waited >= 10) then
+    insert into public.matches (host_id) values (oldest.user_id) returning id into new_id;
+    insert into public.match_players (match_id, user_id, pseudo, rating_before, opponents_avg)
+    select new_id, p.id, p.pseudo, p.rating,
+           coalesce((select round(avg(o.rating)) from public.profiles o where o.id = any (chosen) and o.id <> p.id), p.rating)
+    from public.profiles p where p.id = any (chosen);
+    delete from public.match_queue where user_id = any (chosen);
+    if uid = any (chosen) then
+      return public.poll_queue();
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'status', 'waiting',
+    'waiting', (select count(*) from public.match_queue),
+    'seconds', floor(extract(epoch from now() - mine.joined_at)));
+end;
+$$;
+
+-- L'hôte publie le code de sa table
+create or replace function public.set_match_code(p_match bigint, p_code text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_code is null or p_code !~ '^[A-Z0-9]{4,8}$' then raise exception 'Code de table invalide.'; end if;
+  update public.matches set code = p_code
+   where id = p_match and host_id = auth.uid() and status = 'forming';
+  if not found then raise exception 'Partie classée introuvable.'; end if;
+end;
+$$;
+
+-- L'hôte annule une table qui n'a pas pu démarrer
+create or replace function public.cancel_match(p_match bigint)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.matches set status = 'cancelled'
+   where id = p_match and host_id = auth.uid() and status = 'forming';
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Classement (public, même sans compte) : top N + la position du joueur connecté
+--   p_sort : 'cote' (parties classées), 'jetons' ou 'victoires'
+-- ---------------------------------------------------------------------------
+
+create or replace function public.leaderboard(p_sort text default 'cote', p_limit integer default 50)
+returns table (
+  rank          bigint,
+  pseudo        text,
+  title         text,
+  frame         text,
+  avatar_path   text,
+  rating        integer,
+  chips         bigint,
+  wins          integer,
+  games_played  integer,
+  ranked_played integer,
+  ranked_wins   integer,
+  is_me         boolean
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with ranked as (
+    select p.*,
+           row_number() over (order by
+             case when p_sort = 'jetons' then p.chips
+                  when p_sort = 'victoires' then p.wins
+                  else p.rating end desc,
+             case when p_sort = 'victoires' then p.games_played else 0 end asc,
+             p.created_at asc) as rnk
+    from public.profiles p
+    where case when p_sort = 'jetons' then p.games_played > 0
+               when p_sort = 'victoires' then p.wins > 0
+               else p.ranked_played > 0 end
+  )
+  select rnk, r.pseudo, r.title, r.frame, r.avatar_path, r.rating, r.chips, r.wins,
+         r.games_played, r.ranked_played, r.ranked_wins, r.id = auth.uid()
+  from ranked r
+  where rnk <= least(greatest(coalesce(p_limit, 50), 1), 100) or r.id = auth.uid()
+  order by rnk;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Administration (à lancer depuis le SQL Editor de Supabase ; interdit aux joueurs)
 --   Attribuer un cadre exclusif : select public.grant_frame('adresse@exemple.fr', 'couronne');
 --   Le retirer                  : select public.revoke_frame('adresse@exemple.fr', 'couronne');
@@ -344,7 +603,9 @@ end;
 $$;
 
 -- Début de partie : prélève la mise (1 000 jetons) et ouvre une partie
-create or replace function public.start_game(p_players integer)
+-- (ancienne version à un seul paramètre remplacée par celle-ci)
+drop function if exists public.start_game(integer);
+create or replace function public.start_game(p_players integer, p_match bigint default null)
 returns bigint
 language plpgsql
 security definer
@@ -354,16 +615,33 @@ declare
   uid     uuid := auth.uid();
   buy_in  constant integer := 1000;
   game_id bigint;
+  seats   integer;
 begin
   if uid is null then raise exception 'Vous devez être connecté.'; end if;
   if p_players is null or p_players not between 2 and 6 then
     raise exception 'Nombre de joueurs invalide.';
   end if;
-  update public.profiles set chips = chips - buy_in where id = uid and chips >= buy_in;
+  if p_match is not null then
+    -- Partie classée : il faut faire partie de cette table, une seule fois
+    if not exists (select 1 from public.match_players where match_id = p_match and user_id = uid) then
+      raise exception 'Vous ne faites pas partie de cette partie classée.';
+    end if;
+    if exists (select 1 from public.games where match_id = p_match and user_id = uid) then
+      raise exception 'Cette partie classée a déjà commencé pour vous.';
+    end if;
+    select count(*) into seats from public.match_players where match_id = p_match;
+    if p_players > seats then raise exception 'Nombre de joueurs invalide pour cette partie classée.'; end if;
+    update public.matches set status = 'playing' where id = p_match and status <> 'cancelled';
+  end if;
+  update public.profiles
+     set chips = chips - buy_in,
+         -- Partie classée : 15 points retenus d'avance (perdus en cas d'abandon, rendus à la fin)
+         rating = case when p_match is null then rating else greatest(0, rating - 15) end
+   where id = uid and chips >= buy_in;
   if not found then
     raise exception 'Solde insuffisant : il faut 1 000 jetons pour s''asseoir à une table.';
   end if;
-  insert into public.games (user_id, players, buy_in) values (uid, p_players, buy_in)
+  insert into public.games (user_id, players, buy_in, match_id) values (uid, p_players, buy_in, p_match)
   returning id into game_id;
   return game_id;
 end;
@@ -388,6 +666,10 @@ declare
   g         public.games;
   table_max bigint;
   result    public.profiles;
+  mp        public.match_players;
+  score     numeric;
+  expected  numeric;
+  delta     integer;
 begin
   if uid is null then raise exception 'Vous devez être connecté.'; end if;
 
@@ -409,17 +691,33 @@ begin
     raise exception 'Montant du plus gros pot invalide.';
   end if;
 
+  -- Partie classée : chaque place ne peut être déclarée qu'une fois, puis calcul de la cote
+  if g.match_id is not null then
+    if exists (select 1 from public.games
+               where match_id = g.match_id and id <> g.id and finished_at is not null and place = p_place) then
+      raise exception 'Cette place a déjà été déclarée par un autre joueur de la partie.';
+    end if;
+    select * into mp from public.match_players where match_id = g.match_id and user_id = uid;
+    -- Score : 1 pour le gagnant, 0 pour le dernier ; attendu selon l'écart de cote (Elo)
+    score := (g.players - p_place)::numeric / greatest(1, g.players - 1);
+    expected := 1 / (1 + power(10, (mp.opponents_avg - mp.rating_before)::numeric / 400));
+    delta := round(40 * (score - expected));
+  end if;
+
   update public.games
-     set finished_at = now(), final_chips = p_final_chips, place = p_place
+     set finished_at = now(), final_chips = p_final_chips, place = p_place, rating_delta = delta
    where id = g.id;
 
   update public.profiles
-     set chips        = chips + p_final_chips,
-         games_played = games_played + 1,
-         wins         = wins + case when p_place = 1 then 1 else 0 end,
-         best_place   = least(coalesce(best_place, p_place), p_place),
-         hands_won    = hands_won + p_hands_won,
-         biggest_pot  = greatest(biggest_pot, p_biggest_pot)
+     set chips         = chips + p_final_chips,
+         games_played  = games_played + 1,
+         wins          = wins + case when p_place = 1 then 1 else 0 end,
+         best_place    = least(coalesce(best_place, p_place), p_place),
+         hands_won     = hands_won + p_hands_won,
+         biggest_pot   = greatest(biggest_pot, p_biggest_pot),
+         rating        = case when delta is null then rating else greatest(0, rating + 15 + delta) end,
+         ranked_played = ranked_played + case when delta is null then 0 else 1 end,
+         ranked_wins   = ranked_wins + case when delta is not null and p_place = 1 then 1 else 0 end
    where id = uid
   returning * into result;
   return result;
@@ -496,7 +794,15 @@ revoke all on function public.set_avatar(text) from public;
 revoke all on function public.set_title(text) from public;
 revoke all on function public.grant_frame(text, text) from public, anon, authenticated;
 revoke all on function public.revoke_frame(text, text) from public, anon, authenticated;
-revoke all on function public.start_game(integer) from public;
+revoke all on function public.start_game(integer, bigint) from public;
+revoke all on function public.account_verified(uuid) from public, anon, authenticated;
+revoke all on function public.current_match(uuid) from public, anon, authenticated;
+revoke all on function public.join_queue() from public;
+revoke all on function public.leave_queue() from public;
+revoke all on function public.poll_queue() from public;
+revoke all on function public.set_match_code(bigint, text) from public;
+revoke all on function public.cancel_match(bigint) from public;
+revoke all on function public.leaderboard(text, integer) from public;
 revoke all on function public.finish_game(bigint, bigint, integer, integer, bigint) from public;
 revoke all on function public.refill_chips() from public;
 
@@ -506,6 +812,12 @@ grant execute on function public.set_pseudo(text) to authenticated;
 grant execute on function public.set_frame(text) to authenticated;
 grant execute on function public.set_avatar(text) to authenticated;
 grant execute on function public.set_title(text) to authenticated;
-grant execute on function public.start_game(integer) to authenticated;
+grant execute on function public.start_game(integer, bigint) to authenticated;
+grant execute on function public.join_queue() to authenticated;
+grant execute on function public.leave_queue() to authenticated;
+grant execute on function public.poll_queue() to authenticated;
+grant execute on function public.set_match_code(bigint, text) to authenticated;
+grant execute on function public.cancel_match(bigint) to authenticated;
+grant execute on function public.leaderboard(text, integer) to anon, authenticated;
 grant execute on function public.finish_game(bigint, bigint, integer, integer, bigint) to authenticated;
 grant execute on function public.refill_chips() to authenticated;

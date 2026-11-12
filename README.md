@@ -29,6 +29,18 @@ et un mot de passe. Un compte apporte :
   restants à la fin (quitter en cours de partie fait perdre la mise). Recharge gratuite à 1 000 jetons
   quand le solde est trop bas.
 
+### Parties classées et classement
+
+- **Partie classée** (onglet « Classée ») : réservée aux comptes dont l'adresse e-mail est **confirmée**
+  (vérifié par le serveur). Le jeu place les joueurs en file d'attente et forme une table de 2 à 6 joueurs
+  de cote proche (l'écart accepté grandit avec l'attente). Un joueur devient l'hôte, les autres le rejoignent
+  automatiquement ; pas de bots. La **cote** (1 000 au départ, style Elo) évolue selon la place obtenue et le
+  niveau des adversaires ; abandonner coûte 15 points.
+- **Classement** (bouton « 🏆 Classement », visible par tous) : top 50 par cote, par jetons ou par victoires,
+  avec la position du joueur connecté.
+- Pour que « vérifié » ait un sens, laissez **Confirm email** activé dans Supabase
+  (Authentication → Sign In / Providers → Email).
+
 Les comptes utilisent [Supabase](https://supabase.com) (gratuit). Mise en place :
 
 1. Dans le projet Supabase : **SQL Editor → New query**, coller le contenu de `supabase/schema.sql`, puis **Run**.
@@ -85,6 +97,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 | `js/config.js` | Adresse et clé publique du projet Supabase |
 | `js/account.js` | Comptes : inscription, connexion, profil, mise et fin de partie (Supabase) |
 | `js/accountUi.js` | Écrans « Mon compte » et « Mon profil », barre de compte |
+| `js/ranked.js` | Parties classées (file d'attente, formation des tables) et classement |
 | `js/looks.js` | Apparence : cadres, titres, photos de profil (recadrage interactif, vérification) |
 | `supabase/schema.sql` | Base de données des comptes : tables, règles d'accès, fonctions |
 | `style.css` | Table, cartes en CSS, mise en page responsive |
