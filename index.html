@@ -10,7 +10,7 @@
   <link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=202611121611">
+  <link rel="stylesheet" href="style.css?v=202611130824">
 </head>
 <body>
 
@@ -79,8 +79,9 @@
         </label>
 
         <div class="ranked-info" data-modes="ranked">
-          <p class="field-hint">Partie classée : le jeu vous trouve 1 à 5 adversaires de niveau proche. Votre cote monte ou
-            descend selon votre place. Mise : 1 000 jetons ; abandonner en cours de partie coûte 15 points de cote.</p>
+          <p class="field-hint">Partie classée : le jeu vous place à une table de 3 ou 4 joueurs de niveau proche. Personne
+            au bout de 10 s ? Vous affrontez 4 bots difficiles. Votre cote monte ou descend selon votre place.
+            Mise : 1 000 jetons ; abandonner en cours de partie coûte 15 points de cote.</p>
           <ul class="requirements" id="ranked-requirements"></ul>
         </div>
 
@@ -226,7 +227,8 @@
       <p class="home-subtitle" id="queue-status" aria-live="polite">Recherche d’adversaires…</p>
       <p class="queue-meta" id="queue-meta"></p>
       <ul class="lobby-players" id="queue-players"></ul>
-      <p class="field-hint">Tables de 2 à 6 joueurs ayant un compte vérifié, de cote proche. L’écart accepté grandit avec l’attente.</p>
+      <p class="field-hint">Tables de 3 à 4 joueurs ayant un compte vérifié, de cote proche (l’écart accepté grandit avec l’attente).
+        Sans table au bout de 10 s, vous affrontez 4 bots difficiles.</p>
       <p class="form-error" id="queue-error" role="alert" hidden></p>
       <button type="button" class="btn btn-ghost" id="btn-queue-cancel">Annuler la recherche</button>
     </div>
@@ -516,21 +518,21 @@
     </div>
   </section>
 
-  <script src="js/deck.js?v=202611121611"></script>
-  <script src="js/handEvaluator.js?v=202611121611"></script>
-  <script src="js/game.js?v=202611121611"></script>
-  <script src="js/bot.js?v=202611121611"></script>
-  <script src="js/session.js?v=202611121611"></script>
-  <script src="js/net.js?v=202611121611"></script>
-  <script src="js/config.js?v=202611121611"></script>
-  <script src="js/looks.js?v=202611121611"></script>
-  <script src="js/account.js?v=202611121611"></script>
-  <script src="js/accountUi.js?v=202611121611"></script>
-  <script src="js/ranked.js?v=202611121611"></script>
-  <script src="js/tables.js?v=202611121611"></script>
-  <script src="js/bonus.js?v=202611121611"></script>
-  <script src="js/shop.js?v=202611121611"></script>
-  <script src="js/rules.js?v=202611121611"></script>
-  <script src="js/ui.js?v=202611121611"></script>
+  <script src="js/deck.js?v=202611130824"></script>
+  <script src="js/handEvaluator.js?v=202611130824"></script>
+  <script src="js/game.js?v=202611130824"></script>
+  <script src="js/bot.js?v=202611130824"></script>
+  <script src="js/session.js?v=202611130824"></script>
+  <script src="js/net.js?v=202611130824"></script>
+  <script src="js/config.js?v=202611130824"></script>
+  <script src="js/looks.js?v=202611130824"></script>
+  <script src="js/account.js?v=202611130824"></script>
+  <script src="js/accountUi.js?v=202611130824"></script>
+  <script src="js/ranked.js?v=202611130824"></script>
+  <script src="js/tables.js?v=202611130824"></script>
+  <script src="js/bonus.js?v=202611130824"></script>
+  <script src="js/shop.js?v=202611130824"></script>
+  <script src="js/rules.js?v=202611130824"></script>
+  <script src="js/ui.js?v=202611130824"></script>
 </body>
 </html>

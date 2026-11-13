@@ -527,6 +527,22 @@
       this.startRunner(game, { difficulty, multiplayer: false });
     }
 
+    /**
+     * Partie classée contre des bots (aucun adversaire trouvé à temps) : 4 bots difficiles.
+     * La mise et la cote passent par le compte comme pour une partie classée entre joueurs.
+     */
+    startRankedBots(matchId, bots) {
+      this.teardown();
+      this.mode = 'solo';
+      this.rankedGame = { matchId };
+      const name = this.accountUi.effectiveName(this.settings.name);
+      const players = [{ name, kind: 'local', look: Poker.Account.look }]
+        .concat(pickBotNames(bots, [name]).map((n) => ({ name: n, kind: 'bot' })));
+      const game = new PokerGame({ players, startingChips: STARTING_CHIPS, handsPerLevel: HANDS_PER_LEVEL });
+      this.accountUi.beginGame(players.length, matchId);
+      this.startRunner(game, { difficulty: 'difficile', multiplayer: false });
+    }
+
     /** Lance la boucle de jeu locale (solo ou hôte). Le joueur local est toujours au siège 0. */
     startRunner(game, { difficulty, multiplayer }) {
       this.resetTableState();

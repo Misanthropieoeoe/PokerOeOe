@@ -20,6 +20,7 @@
 
   const POLL_MS = 2000;
   const GUEST_WAIT_MS = 60000; // sans code de table au bout d'une minute, on relance la recherche
+  const BOTS_AFTER_S = 10;     // sans table au bout de 10 s : partie contre 4 bots difficiles (décidé par le serveur)
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -157,8 +158,10 @@
       if (!this.active || !state) return;
       if (state.status === 'waiting') {
         const others = Math.max(0, (state.waiting || 1) - 1);
+        const botsIn = Math.max(0, BOTS_AFTER_S - (state.seconds || 0));
         this.setStatus('Recherche d’adversaires…',
-          `${others === 0 ? 'Aucun autre joueur' : others === 1 ? '1 autre joueur' : `${others} autres joueurs`} dans la file · ${duration(state.seconds)}`);
+          `${others === 0 ? 'Aucun autre joueur' : others === 1 ? '1 autre joueur' : `${others} autres joueurs`} dans la file · ${duration(state.seconds)}` +
+          (botsIn > 0 ? ` · bots dans ${botsIn} s` : ' · préparation des bots…'));
         return;
       }
       if (state.status === 'idle') {
@@ -167,6 +170,16 @@
         return;
       }
       if (state.status !== 'matched') return;
+
+      // Personne à temps : partie classée contre 4 bots difficiles
+      if (state.bots > 0) {
+        this.stopTimer();
+        this.active = false;
+        this.match = null;
+        this.setStatus('Pas d’adversaire disponible', `Partie classée contre ${state.bots} bots difficiles…`);
+        this.app.startRankedBots(state.match_id, state.bots);
+        return;
+      }
 
       if (!this.match || this.match.id !== state.match_id) {
         this.match = { id: state.match_id, role: state.role, players: state.players, since: Date.now(), started: false };

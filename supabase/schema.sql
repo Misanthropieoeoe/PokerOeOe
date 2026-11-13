@@ -66,6 +66,9 @@ create table if not exists public.matches (
   status     text not null default 'forming' check (status in ('forming', 'playing', 'cancelled')),
   created_at timestamptz not null default now()
 );
+-- Partie classée contre des bots (personne de disponible) : nombre de bots et de places
+alter table public.matches add column if not exists bots integer not null default 0;
+alter table public.matches add column if not exists seats integer;
 create table if not exists public.match_players (
   match_id      bigint not null references public.matches (id) on delete cascade,
   user_id       uuid not null references auth.users (id) on delete cascade,
@@ -458,6 +461,7 @@ begin
       'match_id', m.id,
       'role', case when m.host_id = uid then 'host' else 'guest' end,
       'code', m.code,
+      'bots', m.bots,
       'players', (select jsonb_agg(jsonb_build_object('pseudo', pseudo, 'rating', rating_before) order by rating_before desc)
                   from public.match_players where match_id = m.id));
   end if;
@@ -470,8 +474,9 @@ begin
   -- Les joueurs qui ne donnent plus de nouvelles quittent la file
   delete from public.match_queue where last_seen < now() - interval '15 seconds';
 
-  -- Table autour du joueur qui attend depuis le plus longtemps, cotes proches
-  -- (l'écart toléré grandit avec l'attente : 150 points + 25 par seconde)
+  -- Table de 3 à 4 joueurs autour de celui qui attend depuis le plus longtemps, cotes proches
+  -- (l'écart toléré grandit avec l'attente : 150 points + 25 par seconde).
+  -- 4 joueurs : table immédiate ; 3 joueurs : après 5 s d'attente (le temps qu'un 4e arrive).
   select * into oldest from public.match_queue order by joined_at limit 1;
   waited := extract(epoch from now() - oldest.joined_at);
   gap := 150 + 25 * waited;
@@ -480,12 +485,12 @@ begin
     where abs(rating - oldest.rating) <= gap
       and (public.current_match(user_id)).id is null
     order by joined_at
-    limit 6
+    limit 4
   ) c;
 
-  if coalesce(array_length(chosen, 1), 0) >= 6
-     or (coalesce(array_length(chosen, 1), 0) >= 2 and waited >= 10) then
-    insert into public.matches (host_id) values (oldest.user_id) returning id into new_id;
+  if coalesce(array_length(chosen, 1), 0) >= 4
+     or (coalesce(array_length(chosen, 1), 0) >= 3 and waited >= 5) then
+    insert into public.matches (host_id, seats) values (oldest.user_id, array_length(chosen, 1)) returning id into new_id;
     insert into public.match_players (match_id, user_id, pseudo, rating_before, opponents_avg)
     select new_id, p.id, p.pseudo, p.rating,
            coalesce((select round(avg(o.rating)) from public.profiles o where o.id = any (chosen) and o.id <> p.id), p.rating)
@@ -494,6 +499,16 @@ begin
     if uid = any (chosen) then
       return public.poll_queue();
     end if;
+  end if;
+
+  -- Personne pour former une table au bout de 10 s : partie classée contre 4 bots difficiles
+  if mine.joined_at <= now() - interval '10 seconds' then
+    insert into public.matches (host_id, bots, seats) values (uid, 4, 5) returning id into new_id;
+    insert into public.match_players (match_id, user_id, pseudo, rating_before, opponents_avg)
+    select new_id, p.id, p.pseudo, p.rating, 1200   -- les bots difficiles comptent comme des joueurs à 1 200
+    from public.profiles p where p.id = uid;
+    delete from public.match_queue where user_id = uid;
+    return public.poll_queue();
   end if;
 
   return jsonb_build_object(
@@ -815,7 +830,8 @@ begin
     if exists (select 1 from public.games where match_id = p_match and user_id = uid) then
       raise exception 'Cette partie classée a déjà commencé pour vous.';
     end if;
-    select count(*) into seats from public.match_players where match_id = p_match;
+    select coalesce(m.seats, (select count(*) from public.match_players where match_id = p_match))
+      into seats from public.matches m where m.id = p_match;
     if p_players > seats then raise exception 'Nombre de joueurs invalide pour cette partie classée.'; end if;
     update public.matches set status = 'playing' where id = p_match and status <> 'cancelled';
   end if;
@@ -887,7 +903,9 @@ begin
     -- Score : 1 pour le gagnant, 0 pour le dernier ; attendu selon l'écart de cote (Elo)
     score := (g.players - p_place)::numeric / greatest(1, g.players - 1);
     expected := 1 / (1 + power(10, (mp.opponents_avg - mp.rating_before)::numeric / 400));
-    delta := round(40 * (score - expected));
+    -- Contre des bots, la cote bouge moitié moins (K = 20 au lieu de 40)
+    delta := round(case when (select bots from public.matches where id = g.match_id) > 0 then 20 else 40 end
+                   * (score - expected));
   end if;
 
   update public.games

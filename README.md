@@ -38,10 +38,11 @@ et un mot de passe. Un compte apporte :
 ### Parties classées et classement
 
 - **Partie classée** (onglet « Classée ») : réservée aux comptes dont l'adresse e-mail est **confirmée**
-  (vérifié par le serveur). Le jeu place les joueurs en file d'attente et forme une table de 2 à 6 joueurs
-  de cote proche (l'écart accepté grandit avec l'attente). Un joueur devient l'hôte, les autres le rejoignent
-  automatiquement ; pas de bots. La **cote** (1 000 au départ, style Elo) évolue selon la place obtenue et le
-  niveau des adversaires ; abandonner coûte 15 points.
+  (vérifié par le serveur). Le jeu place les joueurs en file d'attente et forme une table de **3 à 4 joueurs**
+  de cote proche (4 : tout de suite ; 3 : après 5 s ; l'écart accepté grandit avec l'attente). Un joueur devient
+  l'hôte, les autres le rejoignent automatiquement. **Sans table au bout de 10 s**, le joueur affronte
+  **4 bots difficiles** (comptés comme des joueurs à 1 200 ; la cote y bouge moitié moins). La **cote**
+  (1 000 au départ, style Elo) évolue selon la place obtenue et le niveau des adversaires ; abandonner coûte 15 points.
 - **Classement** (bouton « 🏆 Classement », visible par tous) : top 50 par cote, par jetons ou par victoires,
   avec la position du joueur connecté.
 - Pour que « vérifié » ait un sens, laissez **Confirm email** activé dans Supabase
@@ -84,7 +85,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 
 ## Mise à jour du site
 
-`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611121611`).
+`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611130824`).
 Après chaque modification, changez ce numéro (le même partout) : les navigateurs rechargent alors les
 nouveaux fichiers au lieu de garder les anciens en cache (GitHub Pages autorise jusqu'à 10 minutes de cache).
 
