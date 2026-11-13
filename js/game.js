@@ -122,6 +122,9 @@
       this.allInRunout = false;
       this.history = [];
       this.listeners = [];
+      // Journal des actions (main, rue, joueur, action, mise totale, tapis) : les bots l'observent
+      // pour lire le style de chaque adversaire (bot.js).
+      this.actionLog = [];
     }
 
     /* ------------------------------------------------------------------ */
@@ -373,6 +376,7 @@
       }
 
       p.hasActed = true;
+      this.actionLog.push({ hand: this.handNumber, phase: this.phase, id: p.id, type, to: p.bet, allIn: p.allIn });
       this._afterAction();
       return type;
     }

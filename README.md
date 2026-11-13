@@ -85,7 +85,7 @@ un tricheur déterminé pourrait gonfler ses statistiques dans ces limites : les
 
 ## Mise à jour du site
 
-`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611130824`).
+`index.html` charge `style.css` et les scripts avec un numéro de version (`style.css?v=202611130835`).
 Après chaque modification, changez ce numéro (le même partout) : les navigateurs rechargent alors les
 nouveaux fichiers au lieu de garder les anciens en cache (GitHub Pages autorise jusqu'à 10 minutes de cache).
 
